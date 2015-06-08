@@ -40,35 +40,34 @@ int main(){
 
 	tps0 = 0;
 	tps1 = 0;
-	tps2 = 0;
 
 	tstart = getTime();	
 	for (int nt = 1; nt <= 100; nt++){   // tend*24*3600
 		memcpy(K, H, sizeof(fType) * atm->Nnodes * atm->Nvar); // K = H
 		
 		tstart0 = getTime();
-		evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1, &tps2);
+		evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
 		tstop0 = getTime();
 		tps0 += (tstop0 - tstart0);
 
 		computeK(H, F, dt, 0.5, atm->Nnodes, atm->Nvar, 1.0, 1, K, d);
 
 		tstart0 = getTime();
-		evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1, &tps2);
+		evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
 		tstop0 = getTime();
 		tps0 += (tstop0 - tstart0);
 		
 		computeK(H, F, dt, 0.5, atm->Nnodes, atm->Nvar, 2.0, 2, K, d);
 
 		tstart0 = getTime();
-		evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1, &tps2);
+		evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
 		tstop0 = getTime();
 		tps0 += (tstop0 - tstart0);
 		
 		computeK(H, F, dt, 1.0, atm->Nnodes, atm->Nvar, 2.0, 3, K, d);
 
 		tstart0 = getTime();
-		evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1, &tps2);
+		evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
 		tstop0 = getTime();
 		tps0 += (tstop0 - tstart0);
 		
@@ -84,10 +83,8 @@ int main(){
 	tps = (tstop-tstart)/100 ;
 	tps0 = tps0/100;
 	tps1 = tps1/100;
-	tps2 = tps2/100;
 
-	printf("1st loop time (seconds): %lf\n", tps1*1e-6);
-	printf("2nd loop time (seconds): %lf\n", tps2*1e-6);
+	printf("Fused loop time (seconds): %lf\n", tps1*1e-6);
 	printf("evalCartRhs_fd time (seconds): %lf\n", tps0*1e-6);
 	printf("Total time (seconds): %lf\n", tps*1e-6);
 

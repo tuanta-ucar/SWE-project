@@ -141,7 +141,6 @@ implicit none
   real*8 :: tstart,tstop,tps
   real*8 :: tstart0, tstop0, tps0 ! evalCartRhs function
   real*8 :: tps1 ! 1st loop in evalCartRhs function
-  real*8 :: tps2 ! 2nd loop in evalCartRhs function
 
   integer :: nt
   integer :: i, inbr
@@ -187,7 +186,6 @@ implicit none
   ! Initialize timing variables
   tps0=0.0D0
   tps1=0.0D0
-  tps2=0.0D0
 
   call cpu_time(tstart)
   do  nt=1,100!nsteps
@@ -199,7 +197,7 @@ implicit none
       K_t = H_t
       
       call cpu_time(tstart0)
-      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1, tps2)
+      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
       call cpu_time(tstop0)
       tps0=tps0+(tstop0-tstart0)
       
@@ -207,7 +205,7 @@ implicit none
       K_t = H_t + 0.5D0*d1
 
       call cpu_time(tstart0)
-      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1, tps2)
+      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
       call cpu_time(tstop0)
       tps0=tps0+(tstop0-tstart0)
 
@@ -215,7 +213,7 @@ implicit none
       K_t = H_t + 0.5D0*d2
       
       call cpu_time(tstart0)
-      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1, tps2)
+      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
       call cpu_time(tstop0)
       tps0=tps0+(tstop0-tstart0)
 
@@ -223,7 +221,7 @@ implicit none
       K_t = H_t + d3
       
       call cpu_time(tstart0)
-      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1, tps2)
+      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
       call cpu_time(tstop0)
       tps0=tps0+(tstop0-tstart0)
       
@@ -242,10 +240,8 @@ implicit none
   tps = (tstop-tstart)/100
   tps0 = tps0/100
   tps1 = tps1/100
-  tps2 = tps2/100
 
-  print *, "Time for 1st loop ", tps1
-  print *, "Time for 2nd loop ", tps2
+  print *, "Time for the fused loop ", tps1
   print *, "Time for evalCartRhs ", tps0 
   print *, "Total (per step) ", tps
   
@@ -385,7 +381,7 @@ implicit none
 
 end subroutine tc5
 
-subroutine evalCartRhs(fcor,ghm,gradghm_t,H_t,F_t, tps1, tps2)
+subroutine evalCartRhs(fcor,ghm,gradghm_t,H_t,F_t, tps1)
   use phys
   use dims
   use derivs
@@ -399,21 +395,10 @@ real*8, intent(in)  ::  H_t(Nvar,Nnodes)
 real*8, intent(out) ::  F_t(Nvar,Nnodes)
 
 real*8, intent(out) ::  tps1   ! timing variable for 1st loop
-real*8, intent(out) ::  tps2   ! timing variable for 2nd loop
 
 integer :: i, inbr, ivar
 
-real*8  Tx(Nvar,Nnodes)
-real*8  Ty(Nvar,Nnodes)
-real*8  Tz(Nvar,Nnodes)
-real*8  HV(Nvar,Nnodes)
-
 real*8 p,q,s
-
-real*8 sum1
-real*8 sum2
-real*8 sum3
-real*8 sum4
 
 real*8 tstart, tstop ! timing variables
 
@@ -422,6 +407,10 @@ real*8 H_i1, H_i2, H_i3, H_i4
 real*8 Tx_i1, Tx_i2, Tx_i3, Tx_i4
 real*8 Ty_i1, Ty_i2, Ty_i3, Ty_i4
 real*8 Tz_i1, Tz_i2, Tz_i3, Tz_i4
+real*8 HV_i1, HV_i2, HV_i3, HV_i4
+real*8 nbr_id
+
+real*8 dp_x, dp_y, dp_z, l_mat
 
 !
 ! Compute the (projected) Cartesian derivatives applied to the velocity
@@ -436,60 +425,68 @@ do i=1,Nnodes   ! 1st loop to be optimized
    !
    !
 
-   do ivar=1,NVar
-      sum1 = 0.0D0
-      sum2 = 0.0D0
-      sum3 = 0.0D0
-      sum4 = 0.0D0
-      do inbr=1,Nnbr
-         sum1 = sum1+DPx(inbr,i)*H_t(ivar,idx(inbr,i))
-         sum2 = sum2+DPy(inbr,i)*H_t(ivar,idx(inbr,i))
-         sum3 = sum3+DPz(inbr,i)*H_t(ivar,idx(inbr,i))
-         sum4 = sum4+Lmat(inbr,i)*H_t(ivar,idx(inbr,i))
-      end do
-      Tx(ivar,i) = sum1
-      Ty(ivar,i) = sum2
-      Tz(ivar,i) = sum3
-      HV(ivar,i) = sum4
+   Tx_i1 = 0.0D0
+   Tx_i2 = 0.0D0
+   Tx_i3 = 0.0D0
+   Tx_i4 = 0.0D0
+   
+   Ty_i1 = 0.0D0
+   Ty_i2 = 0.0D0
+   Ty_i3 = 0.0D0
+   Ty_i4 = 0.0D0
+   
+   Tz_i1 = 0.0D0
+   Tz_i2 = 0.0D0
+   Tz_i3 = 0.0D0
+   Tz_i4 = 0.0D0
+   
+   HV_i1 = 0.0D0
+   HV_i2 = 0.0D0
+   HV_i3 = 0.0D0
+   HV_i4 = 0.0D0
+
+   do inbr=1,Nnbr
+      nbr_id = idx(inbr,i)
+      dp_x = DPx(inbr,i)
+      dp_y = DPy(inbr,i)
+      dp_z = DPz(inbr,i)
+      l_mat = Lmat(inbr,i)
+ 
+      Tx_i1 = Tx_i1 + dp_x*H_t(1,nbr_id)
+      Ty_i1 = Ty_i1 + dp_y*H_t(1,nbr_id)
+      Tz_i1 = Tz_i1 + dp_z*H_t(1,nbr_id)
+      HV_i1 = HV_i1 + l_mat*H_t(1,nbr_id)
+      
+      Tx_i2 = Tx_i2 + dp_x*H_t(2,nbr_id)
+      Ty_i2 = Ty_i2 + dp_y*H_t(2,nbr_id)
+      Tz_i2 = Tz_i2 + dp_z*H_t(2,nbr_id)
+      HV_i2 = HV_i2 + l_mat*H_t(2,nbr_id)
+      
+      Tx_i3 = Tx_i3 + dp_x*H_t(3,nbr_id)
+      Ty_i3 = Ty_i3 + dp_y*H_t(3,nbr_id)
+      Tz_i3 = Tz_i3 + dp_z*H_t(3,nbr_id)
+      HV_i3 = HV_i3 + l_mat*H_t(3,nbr_id)
+
+      Tx_i4 = Tx_i4 + dp_x*H_t(4,nbr_id)
+      Ty_i4 = Ty_i4 + dp_y*H_t(4,nbr_id)
+      Tz_i4 = Tz_i4 + dp_z*H_t(4,nbr_id)
+      HV_i4 = HV_i4 + l_mat*H_t(4,nbr_id)
    end do
 
-end do 
-call cpu_time(tstop)
-tps1 = tps1 + (tstop-tstart)
+   !
+   ! This is the computation for the right hand side of the (Cartesian) 
+   ! momentum equations.
+   !
 
-! insert communication/synchronization here
-
-!
-! This is the computation for the right hand side of the (Cartesian) 
-! momentum equations.
-!
-
-call cpu_time(tstart)
-do i=1,Nnodes   ! 2nd loop to be optimized
    !
    ! FLOPS2 = 3*11
    !     
    ! store data used more than once in temporary variables
+   
    H_i1 = H_t(1,i)
    H_i2 = H_t(2,i)
    H_i3 = H_t(3,i)
    H_i4 = H_t(4,i)
-
-   Tx_i1 = Tx(1,i)
-   Tx_i2 = Tx(2,i)
-   Tx_i3 = Tx(3,i)
-   Tx_i4 = Tx(4,i)
-
-   Ty_i1 = Ty(1,i)
-   Ty_i2 = Ty(2,i)
-   Ty_i3 = Ty(3,i)
-   Ty_i4 = Ty(4,i)
-
-   Tz_i1 = Tz(1,i)
-   Tz_i2 = Tz(2,i)
-   Tz_i3 = Tz(3,i)
-   Tz_i4 = Tz(4,i)
-   
 
    p = -(H_i1*Tx_i1 + H_i2*Ty_i1 + H_i3*Tz_i1 + (fcor(i))*(y(i)*H_i3 - z(i)*H_i2) + Tx_i4)
    q = -(H_i1*Tx_i2 + H_i2*Ty_i2 + H_i3*Tz_i2 + (fcor(i))*(z(i)*H_i1 - x(i)*H_i3) + Ty_i4)
@@ -501,9 +498,9 @@ do i=1,Nnodes   ! 2nd loop to be optimized
    ! FLOPS3 = 3*6
    !
 
-   F_t(1,i) = p_u_t(1,i)*p + p_u_t(2,i)*q + p_u_t(3,i)*s+HV(1,i)
-   F_t(2,i) = p_v_t(1,i)*p + p_v_t(2,i)*q + p_v_t(3,i)*s+HV(2,i)
-   F_t(3,i) = p_w_t(1,i)*p + p_w_t(2,i)*q + p_w_t(3,i)*s+HV(3,i)
+   F_t(1,i) = p_u_t(1,i)*p + p_u_t(2,i)*q + p_u_t(3,i)*s+HV_i1
+   F_t(2,i) = p_v_t(1,i)*p + p_v_t(2,i)*q + p_v_t(3,i)*s+HV_i2
+   F_t(3,i) = p_w_t(1,i)*p + p_w_t(2,i)*q + p_w_t(3,i)*s+HV_i3
 
    ! Right-hand side for the geopotential (Does not need to be projected, this
    ! has already been accounted for in the DPx, DPy, and DPz operators for
@@ -514,11 +511,11 @@ do i=1,Nnodes   ! 2nd loop to be optimized
    !
 
    F_t(4,i) = -(H_i1*(Tx_i4 - gradghm_t(1,i)) + H_i2*(Ty_i4 - gradghm_t(2,i)) +  &
-              H_i3*(Tz_i4 - gradghm_t(3,i)) + (H_i4+gh0-ghm(i))*(Tx_i1 + Ty_i2 + Tz_i3))+HV(4,i)
+              H_i3*(Tz_i4 - gradghm_t(3,i)) + (H_i4+gh0-ghm(i))*(Tx_i1 + Ty_i2 + Tz_i3))+HV_i4
 
 end do
 call cpu_time(tstop)
-tps2 = tps2 + (tstop-tstart)
+tps1 = tps1 + (tstop-tstart)
 
 ! FLOPS = Nnodes*(8*Nnbr*Nvar+64)
 
