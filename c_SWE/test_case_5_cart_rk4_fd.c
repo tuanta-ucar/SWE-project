@@ -10,7 +10,7 @@ void computeK ( const fType* H, const fType* F,
 int main(){
 	FILE *prof_file = fopen("profiling_file.txt", "w");
 
-	for (int attempt = 0; attempt < 5; attempt++){
+	for (int attempt = 0; attempt < 6; attempt++){
 		// timing variables
 		long long tstart, tstop, tps;		// for main loop
 		long long tstart0, tstop0, tps0;	// for evalCartRhs_fd function

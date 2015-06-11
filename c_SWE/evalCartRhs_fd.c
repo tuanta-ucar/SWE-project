@@ -84,8 +84,7 @@ void  evalCartRhs_fd( 	const fType* H,
 			HV_i1,HV_i2,HV_i3,HV_i4, \
 			H_i1,H_i2,H_i3,H_i4, 	 \
 			p,q,s)			 \
-						 \
-		num_threads(Nthreads)			 
+
 	{	
 	#pragma omp for \
 		schedule(static, chunk)

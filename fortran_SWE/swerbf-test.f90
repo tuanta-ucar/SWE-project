@@ -25,7 +25,7 @@ end module dims
 
 module derivs
   use dims
-implicit none
+implicit none 
 
   ! derivative parameters
 
@@ -34,11 +34,11 @@ implicit none
   integer :: dim = 2          ! dimension of stencil (on the sphere dim = 2)
   real*8  :: gamma = -6.4D-22 ! amount of hyperviscosity applied, multiplies Laplacian^order 
 
-  real*8  :: DPx(Nnbr+1,Nnodes)
-  real*8  :: DPy(Nnbr+1,Nnodes)
-  real*8  :: DPz(Nnbr+1,Nnodes)
-  real*8  :: Lmat(Nnbr+1,Nnodes)
-  integer :: idx(Nnbr,Nnodes)
+  real*8, allocatable  :: DPx(:,:)
+  real*8, allocatable  :: DPy(:,:)
+  real*8, allocatable  :: DPz(:,:)
+  real*8, allocatable  :: Lmat(:,:)
+  integer, allocatable :: idx(:,:)
 
 end module derivs
 
@@ -50,9 +50,9 @@ implicit none
   ! Cartesian coordinates
   ! ================================
 
-  real*8 x(Nnodes)
-  real*8 y(Nnodes)
-  real*8 z(Nnodes)
+  real*8, allocatable ::  x(:)
+  real*8, allocatable ::  y(:)
+  real*8, allocatable ::  z(:)
 
   ! ================================
   ! Spherical Coordinates:
@@ -80,9 +80,9 @@ implicit none
   real*8 p_v(Nnodes,3)
   real*8 p_w(Nnodes,3)
 
-  real*8 p_u_t(3,Nnodes)
-  real*8 p_v_t(3,Nnodes)
-  real*8 p_w_t(3,Nnodes)
+  real*8, allocatable :: p_u_t(:,:)
+  real*8, allocatable :: p_v_t(:,:)
+  real*8, allocatable :: p_w_t(:,:)
 
 end module coords
 
@@ -102,7 +102,7 @@ program swe
   use times
 implicit none
 
-  real*8 fcor(Nnodes)
+  real*8, allocatable :: fcor(:)
 
   ! =======================
   ! Initial state variables
@@ -110,7 +110,7 @@ implicit none
 
   real*8 gh(Nnodes)
   real*8 uc(Nnodes,3)
-  real*8 ghm(Nnodes)
+  real*8, allocatable :: ghm(:)
   real*8 gradghm(Nnodes,3)
 
   real*8 nodes(NNodes,3)
@@ -125,13 +125,13 @@ implicit none
   real*8 d4(Nvar,Nnodes)
 
   ! Transposed versions of H,F,K
-  real*8 H_t(Nvar,Nnodes)
-  real*8 F_t(Nvar,Nnodes)
-  real*8 K_t(Nvar,Nnodes)
+  real*8, allocatable :: H_t(:,:)
+  real*8, allocatable :: F_t(:,:)
+  real*8, allocatable :: K_t(:,:)
 
   ! Transposed versions of uc, gradghm
-  real*8 uc_t(3,Nnodes)
-  real*8 gradghm_t(3,Nnodes)
+  real*8, allocatable :: uc_t(:,:)
+  real*8, allocatable :: gradghm_t(:,:)
 
   real*8 ra
   real*8 sum1
@@ -144,19 +144,20 @@ implicit none
 
   integer :: nt
   integer :: i, inbr
-
   integer :: j
   integer :: recNum=1    !used to read binary file
   real*8 :: tempNum      !used to store value read from binary file
-  real*8 :: checkSum=0.0D0 
 
-  !INTERFACE 
-  !  subroutine deriv_init(nodes)
-  !     use dims
-  !  implicit none
-  !     real*8, intent(in) :: nodes(Nnodes,3)
-  !  end subroutine deriv_init
-  !END INTERFACE
+  !=========== Allocate arrays ===================
+  allocate(DPx(Nnbr+1,Nnodes),DPy(Nnbr+1,Nnodes), &
+           DPz(Nnbr+1,Nnodes),Lmat(Nnbr+1,Nnodes))
+  allocate(idx(Nnbr,Nnodes))
+  allocate(x(Nnodes),y(Nnodes),z(Nnodes))
+  allocate(p_u_t(3,Nnodes),p_v_t(3,Nnodes),p_w_t(3,Nnodes))
+  allocate(H_t(Nvar,Nnodes),F_t(Nvar,Nnodes),K_t(Nvar,Nnodes))
+  allocate(uc_t(3,Nnodes),gradghm_t(3,Nnodes))
+  allocate(ghm(Nnodes),fcor(Nnodes))
+  !=========== End of array allocation ===========
 
   open(UNIT=7,FILE="icos163842",STATUS="OLD")
   do i=1,Nnodes
@@ -173,8 +174,6 @@ implicit none
   H(:,1:3)=uc(:,1:3)
   H(:,4) = gh(:)
   fcor(:) = 2.0D0*omega*(-x(:)*sin(alpha) + z(:)*cos(alpha))   ! Coriolis force
-
-  nt=0
 
   !=======================
   ! Optimization: Transpose H, gradghm to get more efficient memory access
@@ -268,6 +267,15 @@ implicit none
   tps=(tstop-tstart)/nsteps
   print *,(Nnodes*(4.0D0*(8.0D0*Nnbr*Nvar+64.0D0)+Nvar*16.0D0)*1.0D-9)/tps
 
+  !=========== Deallocate arrays ===================
+  deallocate(DPx,DPy,DPz,Lmat)
+  deallocate(idx)
+  deallocate(x,y,z)
+  deallocate(p_u_t,p_v_t,p_w_t)
+  deallocate(H_t,F_t,K_t)
+  deallocate(uc_t,gradghm_t)
+  deallocate(ghm,fcor)
+  !=========== End of array allocation ===========
 end program swe
 
 subroutine coord_init(nodes)
@@ -412,12 +420,33 @@ real*8 nbr_id
 
 real*8 dp_x, dp_y, dp_z, l_mat
 
+integer Nthreads, chunk
 !
 ! Compute the (projected) Cartesian derivatives applied to the velocity
 ! and geopotential.
 !
 
+Nthreads = 32
+chunk = Nnodes / Nthreads
+
 call cpu_time(tstart)
+
+!$OMP PARALLEL &
+!a$OMP SHARED (idx,DPx,DPy,DPz,Lmat, &
+!a$OMP         H_t,F_t,gradghm_t,&
+!a$OMP         x,y,z,fcor,       &
+!a$OMP         ghm,p_u_t,p_v_t,p_w_t) &
+!$OMP PRIVATE (Tx_i1,Tx_i2,Tx_i3,Tx_i4, &
+!$OMP          Ty_i1,Ty_i2,Ty_i3,Ty_i4, &
+!$OMP          Tz_i1,Tz_i2,Tz_i3,Tz_i4, &
+!$OMP          HV_i1,HV_i2,HV_i3,HV_i4, &
+!$OMP          H_i1,H_i2,H_i3,H_i4,     &
+!$OMP          p,q,s,                   &
+!$OMP	       i,inbr,			& 
+!$OMP          nbr_id,dp_x,dp_y,dp_z,l_mat)  &
+!$OMP NUM_THREADS(1)
+
+!$OMP DO SCHEDULE(STATIC,chunk)
 do i=1,Nnodes   ! 1st loop to be optimized
 
    ! 
@@ -491,9 +520,7 @@ do i=1,Nnodes   ! 1st loop to be optimized
    p = -(H_i1*Tx_i1 + H_i2*Ty_i1 + H_i3*Tz_i1 + (fcor(i))*(y(i)*H_i3 - z(i)*H_i2) + Tx_i4)
    q = -(H_i1*Tx_i2 + H_i2*Ty_i2 + H_i3*Tz_i2 + (fcor(i))*(z(i)*H_i1 - x(i)*H_i3) + Ty_i4)
    s = -(H_i1*Tx_i3 + H_i2*Ty_i3 + H_i3*Tz_i3 + (fcor(i))*(x(i)*H_i2 - y(i)*H_i1) + Tz_i4)
-
    ! Project the momentum equations onto the surface of the sphere
-
    !
    ! FLOPS3 = 3*6
    !
@@ -510,10 +537,13 @@ do i=1,Nnodes   ! 1st loop to be optimized
    ! FLOPS4 = 15
    !
 
-   F_t(4,i) = -(H_i1*(Tx_i4 - gradghm_t(1,i)) + H_i2*(Ty_i4 - gradghm_t(2,i)) +  &
-              H_i3*(Tz_i4 - gradghm_t(3,i)) + (H_i4+gh0-ghm(i))*(Tx_i1 + Ty_i2 + Tz_i3))+HV_i4
+  F_t(4,i) = -(H_i1*(Tx_i4 - gradghm_t(1,i)) + H_i2*(Ty_i4 - gradghm_t(2,i)) +  &
+             H_i3*(Tz_i4 - gradghm_t(3,i)) + (H_i4+gh0-ghm(i))*(Tx_i1 + Ty_i2 + Tz_i3))+HV_i4
 
 end do
+!$OMP END DO 
+!$OMP END PARALLEL
+
 call cpu_time(tstop)
 tps1 = tps1 + (tstop-tstart)
 

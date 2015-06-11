@@ -11,7 +11,7 @@ OPT = -O3
 ifeq ($(CC),gfortran)
 	CFLAGS = $(OPT) 
 else
-	CFLAGS = $(OPT) -qopt-report=5 -assume byterecl -xHost -align array64byte
+	CFLAGS = $(OPT) -qopt-report=5 -assume byterecl -xHost -align array64byte -openmp
 endif
 
 #INC = 
