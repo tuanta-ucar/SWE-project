@@ -64,8 +64,7 @@ void  evalCartRhs_fd( 	const fType* H,
 	__assume_aligned(H, 64);
 	__assume_aligned(F, 64);
 	
-	int Nthreads = 32;
-	int chunk = Nnodes / Nthreads;
+	int chunk = Nnodes / 32;
 
 	tstart = getTime();
 
@@ -86,8 +85,7 @@ void  evalCartRhs_fd( 	const fType* H,
 			p,q,s)			 \
 
 	{	
-	#pragma omp for \
-		schedule(static, chunk)
+	#pragma omp for schedule(static, chunk)
 	for (int i = 0; i < Nnodes; i++){
 		Tx_i1 = 0.0;
 		Tx_i2 = 0.0; 
@@ -108,7 +106,7 @@ void  evalCartRhs_fd( 	const fType* H,
 		HV_i2 = 0.0; 
 		HV_i3 = 0.0; 
 		HV_i4 = 0.0; 
-	
+		
 		for (int inbr = 0; inbr < Nnbr; inbr++){
 			int dp_idx = i*(Nnbr+1) + inbr;
 			int h_idx = idx[dp_idx] * Nvar;	   // neighbor's index in H
