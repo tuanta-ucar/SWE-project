@@ -44,43 +44,50 @@ int main(){
 		tps0 = 0;
 		tps1 = 0;
 
-		tstart = getTime();	
+		tstart = getTime();
+		// ########### Thread team created ############
+		#pragma omp parallel shared(atm,H,DP,gradghm,F,K,d,tps1)
+		{	
 		for (int nt = 1; nt <= 100; nt++){   // tend*24*3600
+			#pragma omp single
+			{
 			memcpy(K, H, sizeof(fType) * atm->Nnodes * atm->Nvar); // K = H
-			
-			tstart0 = getTime();
-			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
-			tstop0 = getTime();
-			tps0 += (tstop0 - tstart0);
+			}
 
+			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
+			
+			#pragma omp single
+			{
 			computeK(H, F, dt, 0.5, atm->Nnodes, atm->Nvar, 1.0, 1, K, d);
+			}
 
-			tstart0 = getTime();
 			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
-			tstop0 = getTime();
-			tps0 += (tstop0 - tstart0);
 			
+			#pragma omp single
+			{			
 			computeK(H, F, dt, 0.5, atm->Nnodes, atm->Nvar, 2.0, 2, K, d);
+			}
 
-			tstart0 = getTime();
 			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
-			tstop0 = getTime();
-			tps0 += (tstop0 - tstart0);
-			
+
+			#pragma omp single
+			{			
 			computeK(H, F, dt, 1.0, atm->Nnodes, atm->Nvar, 2.0, 3, K, d);
+			}
 
-			tstart0 = getTime();
 			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
-			tstop0 = getTime();
-			tps0 += (tstop0 - tstart0);
 			
+			#pragma omp single
+			{			
 			computeK(H, F, dt, 1.0, atm->Nnodes, atm->Nvar, 1.0, 4, K, d);
-		
+
 			// update H
 			for (int i = 0; i < atm->Nnodes * atm->Nvar; i++){
 				H[i] += (1.0/6.0) * d[i];
 			}
+			}
 		}
+		} // end of OMP region
 		tstop = getTime();
 
 		tps = (tstop-tstart)/100 ;

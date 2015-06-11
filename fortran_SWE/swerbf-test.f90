@@ -1,7 +1,7 @@
 !
 ! ifort swerbf.f90 
 !
-
+ 
 module phys
   real*8, parameter :: alpha = 0.0D0     ! Angle of rotation measured from the equator.
   real*8, parameter :: a = 6.37122D6     ! Mean radius of the earth (meters).
@@ -95,6 +95,7 @@ implicit none
 end module times
 
 program swe
+  use omp_lib
   use phys
   use dims
   use coords
@@ -390,6 +391,7 @@ implicit none
 end subroutine tc5
 
 subroutine evalCartRhs(fcor,ghm,gradghm_t,H_t,F_t, tps1)
+  use omp_lib
   use phys
   use dims
   use derivs
@@ -426,10 +428,10 @@ integer Nthreads, chunk
 ! and geopotential.
 !
 
-Nthreads = 32
+Nthreads = 8
 chunk = Nnodes / Nthreads
 
-call cpu_time(tstart)
+tstart = omp_get_wtime()
 
 !$OMP PARALLEL &
 !a$OMP SHARED (idx,DPx,DPy,DPz,Lmat, &
@@ -444,7 +446,7 @@ call cpu_time(tstart)
 !$OMP          p,q,s,                   &
 !$OMP	       i,inbr,			& 
 !$OMP          nbr_id,dp_x,dp_y,dp_z,l_mat)  &
-!$OMP NUM_THREADS(1)
+!$OMP NUM_THREADS(Nthreads)
 
 !$OMP DO SCHEDULE(STATIC,chunk)
 do i=1,Nnodes   ! 1st loop to be optimized
@@ -544,7 +546,7 @@ end do
 !$OMP END DO 
 !$OMP END PARALLEL
 
-call cpu_time(tstop)
+tstop = omp_get_wtime()
 tps1 = tps1 + (tstop-tstart)
 
 ! FLOPS = Nnodes*(8*Nnbr*Nvar+64)

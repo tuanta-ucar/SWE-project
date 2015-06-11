@@ -67,27 +67,11 @@ void  evalCartRhs_fd( 	const fType* H,
 	int Nthreads = 32;
 	int chunk = Nnodes / Nthreads;
 
+	// #pragma omp barrier	
 	tstart = getTime();
 
 	// ####### Parallel region #######
-	#pragma omp parallel \
-		shared(	Nnodes,Nnbr,Nvar, \
-			DPx, DPy, DPz, L, \
-			H,F,gradghm,      \
-			x,y,z,f,          \
-			g,a,gh0,	  \
-			ghm,p_u,p_v,p_w)  \
-					  \
-		private(Tx_i1,Tx_i2,Tx_i3,Tx_i4, \
-			Ty_i1,Ty_i2,Ty_i3,Ty_i4, \
-			Tz_i1,Tz_i2,Tz_i3,Tz_i4, \
-			HV_i1,HV_i2,HV_i3,HV_i4, \
-			H_i1,H_i2,H_i3,H_i4, 	 \
-			p,q,s)			 \
-
-	{	
-	#pragma omp for \
-		schedule(static, chunk)
+	#pragma omp for schedule(static, chunk)
 	for (int i = 0; i < Nnodes; i++){
 		Tx_i1 = 0.0;
 		Tx_i2 = 0.0; 
@@ -188,7 +172,11 @@ void  evalCartRhs_fd( 	const fType* H,
 				+ (H_i4 + gh0 - ghm[i]) * (Tx_i1 + Ty_i2 + Tz_i3)
 			    ) 	+ HV_i4;
 	} // end of parallelized for-loop
-	} // end of parallel region	
+	
 	tstop = getTime();
-	*tps1 += (tstop-tstart);	
+	if (omp_get_thread_num() == 0){
+		*tps1 += (tstop-tstart);
+	}
+
+	//#pragma omp barrier 
 }
