@@ -168,7 +168,11 @@ implicit none
   integer :: j
   integer :: recNum      !used to read binary file
   real*8 :: tempNum      !used to store value read from binary file
-  integer :: attempt     !used to run the program multiple times
+  integer :: attempt     !used to run the program multiple timesi
+  
+  integer :: nthreads    !number of threads
+  double
+
   !=========== Allocate arrays ===================
 !  allocate(DPx(Nnbr+1,Nnodes),DPy(Nnbr+1,Nnodes), &
 !           DPz(Nnbr+1,Nnodes),Lmat(Nnbr+1,Nnodes))
@@ -179,7 +183,11 @@ implicit none
 !  allocate(uc_t(3,Nnodes),gradghm_t(3,Nnodes))
 !  allocate(ghm(Nnodes),fcor(Nnodes))
   !=========== End of array allocation ===========
+
+do nthreads=1:20 ! try with different number of threads
   
+  call OMP_SET_NUM_THREADS(nthreads) ! set the corresponding number of threads
+ 
   open(UNIT=7,FILE="icos163842",STATUS="OLD")
   do i=1,Nnodes
      read(7,*)nodes(i,1),nodes(i,2),nodes(i,3)
@@ -192,7 +200,7 @@ implicit none
 
   call tc5(ghm,gradghm,gh,uc)
 
-  do attempt=0,10
+  do attempt=1,10
      H(:,1:3)=uc(:,1:3)
      H(:,4) = gh(:)
      fcor(:) = 2.0D0*omega*(-x(:)*sin(alpha) + z(:)*cos(alpha))   ! Coriolis force
@@ -289,7 +297,8 @@ implicit none
      tps=(tstop-tstart)/nsteps
      print *,(Nnodes*(4.0D0*(8.0D0*Nnbr*Nvar+64.0D0)+Nvar*16.0D0)*1.0D-9)/tps
 
-end do ! end of an attempt 
+  end do ! end of an attempt 
+end do ! end of nthreads
 
   !========== Deallocate arrays ===================
 !  deallocate(DPx,DPy,DPz,Lmat)

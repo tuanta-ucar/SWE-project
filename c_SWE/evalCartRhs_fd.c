@@ -11,6 +11,7 @@ void  evalCartRhs_fd( 	const fType* H,
 			const atm_struct* atm,
 			const fType* gradghm,
 			fType* F,
+			int start_id, int end_id,
 			double* tps1){	// 1st loop time
 
 	// extract out some constants from the atm structure
@@ -45,6 +46,7 @@ void  evalCartRhs_fd( 	const fType* H,
 
 	// compute the (projected) Cartesian derivarives 
 	// applied to the velocity and geopotential
+	/*
 	__assume_aligned(idx, 32);
 	__assume_aligned(DPx, 64);
 	__assume_aligned(DPy, 64);
@@ -52,6 +54,7 @@ void  evalCartRhs_fd( 	const fType* H,
 	__assume_aligned(L, 64);
 	__assume_aligned(H, 64);
 	__assume_aligned(F, 64);
+	*/
 
 	// This is the computation for the right hand side 
 	// of the Cartesia momentum equation
@@ -63,12 +66,12 @@ void  evalCartRhs_fd( 	const fType* H,
 	fType Tz_i1, Tz_i2, Tz_i3, Tz_i4;
 	fType HV_i1, HV_i2, HV_i3, HV_i4;
 
-	// #pragma omp barrier	
+	#pragma omp barrier	
+
 	tstart = omp_get_wtime();
 
 	// ####### Parallel region #######
-	#pragma omp for schedule(static)
-	for (int i = 0; i < Nnodes; i++){
+	for (int i = start_id; i <= end_id; i++){
 		Tx_i1 = 0.0;
 		Tx_i2 = 0.0; 
 		Tx_i3 = 0.0; 
@@ -167,14 +170,14 @@ void  evalCartRhs_fd( 	const fType* H,
 				+ H_i3 * (Tz_i4 - gradghm[i*3+2]) 
 				+ (H_i4 + gh0 - ghm[i]) * (Tx_i1 + Ty_i2 + Tz_i3)
 			    ) 	+ HV_i4;
+
 	} // end of parallelized for-loop
+
+	#pragma omp barrier
 	
-	// tstop = getTime();
 	tstop = omp_get_wtime();
 
 	if (omp_get_thread_num() == 0){
 		*tps1 += (tstop-tstart);
 	}
-
-	//#pragma omp barrier 
 }

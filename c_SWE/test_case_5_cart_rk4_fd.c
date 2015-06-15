@@ -7,9 +7,16 @@ void computeK ( const fType* H, const fType* F,
 		const int Nnodes, const int Nvar,
 		const fType d_coefficient, const int d_num,
 		fType* K, fType* d);
+
+void allocateMemoryToThreads(	fType* H, fType* H_t,
+				DP_struct* DP, DP_struct* DP_t,
+				atm_struct* atm, atm_struct* atm_t,
+				fType* gradghm, fType* gradghm_t,
+				fType* F, fType* K,
+				int start_id, int end_id);	 
 int main(){
 
-for (int nthreads = 1; nthreads < 20; nthreads++){
+for (int nthreads = 1; nthreads <= 32; nthreads++){
 	omp_set_num_threads(nthreads);
 
 	int ntimes = 10;
@@ -17,7 +24,7 @@ for (int nthreads = 1; nthreads < 20; nthreads++){
 	
 	for (int attempt = 0; attempt < ntimes; attempt++){
 		// timing variables
-		double tstart, tstop, tps, tps1;
+		double tps, tps1;
 
 		// constants
 		const fType gamma = -6.4e-22;
@@ -43,65 +50,116 @@ for (int nthreads = 1; nthreads < 20; nthreads++){
 		fType* K = (fType*) _mm_malloc (sizeof(fType) * atm->Nnodes * atm->Nvar, 64);
 		fType* d = (fType*) calloc (atm->Nnodes*atm->Nvar, sizeof(fType));
 
+		// =========== Declare Threaded Arrays ==============
+		atm_struct* atm_t = (atm_struct*) malloc(sizeof(atm_struct));
+		atm_t->Nnodes = atm->Nnodes;
+		atm_t->Nvar = atm->Nvar;
+		atm_t->Nnbr = atm->Nnbr;
+		atm_t->x = (fType*) malloc (sizeof(fType) * atm->Nnodes);
+		atm_t->y = (fType*) malloc (sizeof(fType) * atm->Nnodes);
+		atm_t->z = (fType*) malloc (sizeof(fType) * atm->Nnodes);
+		atm_t->f = (fType*) malloc (sizeof(fType) * atm->Nnodes);
+		atm_t->ghm = (fType*) malloc (sizeof(fType) * atm->Nnodes);
+		atm_t->g = atm->g;
+		atm_t->a = atm->a;
+		atm_t->gh0 = atm->gh0;
+		atm_t->p_u = (fType*) malloc (sizeof(fType) * atm->Nnodes * 3);
+		atm_t->p_v = (fType*) malloc (sizeof(fType) * atm->Nnodes * 3);
+		atm_t->p_w = (fType*) malloc (sizeof(fType) * atm->Nnodes * 3);
+	
+		int paddedSize = atm->Nnodes * (atm->Nnbr+1);
+
+		DP_struct* DP_t = (DP_struct*) malloc (sizeof(DP_struct));
+		DP_t->idx = (int*) malloc(sizeof(int)*paddedSize);
+		DP_t->DPx = (fType*) malloc(sizeof(fType)*paddedSize);
+		DP_t->DPy = (fType*) malloc(sizeof(fType)*paddedSize);
+		DP_t->DPz = (fType*) malloc(sizeof(fType)*paddedSize);
+		DP_t->L = (fType*) malloc(sizeof(fType)*paddedSize);
+
+		fType* H_t = (fType*) malloc(sizeof(fType) * atm->Nnodes * 4);
+		fType* gradghm_t = (fType*) malloc(sizeof(fType) * atm->Nnodes * 3);
+		// ==========================================		
+
 		tps = 0.0;
 		tps1 = 0.0;
 
-		//__assume_aligned(DP->idx, 32);
-        	//__assume_aligned(DP->DPx, 64);
-        	//__assume_aligned(DP->DPy, 64);
-        	//__assume_aligned(DP->DPz, 64);
-        	//__assume_aligned(DP->L, 64);
-        	//__assume_aligned(H, 64);
-        	//__assume_aligned(F, 64);
-
-		tstart = omp_get_wtime();
 		// ########### Thread team created ############
-		#pragma omp parallel shared(atm,H,DP,gradghm,F,K,d,tps1)
-		{	
+		#pragma omp parallel shared(atm,H,DP,gradghm,F,K,d,tps1,tps,\
+						atm_t,H_t,DP_t,gradghm_t)
+		{
+		// thread allocation
+		int thread_id = omp_get_thread_num();
+		int chunkSize = atm->Nnodes/nthreads;
+
+		int start_id, end_id;
+
+		if (thread_id != nthreads-1){
+			start_id = thread_id*chunkSize;
+			end_id = (thread_id+1)*chunkSize-1;
+		} else {
+			start_id = thread_id*chunkSize;
+			end_id = atm->Nnodes-1;
+		}
+
+
+		// Allocate memory to threads 
+		allocateMemoryToThreads(H, H_t, DP, DP_t, atm, atm_t, gradghm, gradghm_t, F, K, start_id, end_id);
+		
+		#pragma omp barrier
+	
+		double tstart = omp_get_wtime();
+		
 		for (int nt = 1; nt <= 100; nt++){   // tend*24*3600
 			#pragma omp single
 			{
-			memcpy(K, H, sizeof(fType) * atm->Nnodes * atm->Nvar); // K = H
+			memcpy(K, H_t, sizeof(fType) * atm_t->Nnodes * atm_t->Nvar); // K = H
 			}
 
-			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
+			
+			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, start_id, end_id, &tps1);
 			
 			#pragma omp single
 			{
-			computeK(H, F, dt, 0.5, atm->Nnodes, atm->Nvar, 1.0, 1, K, d);
+			computeK(H_t, F, dt, 0.5, atm_t->Nnodes, atm_t->Nvar, 1.0, 1, K, d);
 			}
 
-			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
+			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, start_id, end_id, &tps1);
 			
 			#pragma omp single
 			{			
-			computeK(H, F, dt, 0.5, atm->Nnodes, atm->Nvar, 2.0, 2, K, d);
+			computeK(H_t, F, dt, 0.5, atm_t->Nnodes, atm_t->Nvar, 2.0, 2, K, d);
 			}
 
-			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
+			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, start_id, end_id, &tps1);
 
 			#pragma omp single
 			{			
-			computeK(H, F, dt, 1.0, atm->Nnodes, atm->Nvar, 2.0, 3, K, d);
+			computeK(H_t, F, dt, 1.0, atm_t->Nnodes, atm_t->Nvar, 2.0, 3, K, d);
 			}
 
-			evalCartRhs_fd(K, DP, atm, gradghm, F, &tps1);
+			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, start_id, end_id, &tps1);
 			
 			#pragma omp single
 			{			
-			computeK(H, F, dt, 1.0, atm->Nnodes, atm->Nvar, 1.0, 4, K, d);
+			computeK(H_t, F, dt, 1.0, atm_t->Nnodes, atm_t->Nvar, 1.0, 4, K, d);
 
 			// update H
-			for (int i = 0; i < atm->Nnodes * atm->Nvar; i++){
-				H[i] += (1.0/6.0) * d[i];
+			for (int i = 0; i < atm_t->Nnodes * atm_t->Nvar; i++){
+				H_t[i] += (1.0/6.0) * d[i];
 			}
 			}
 		}
+		
+		#pragma omp barrier
+		double tstop = omp_get_wtime();
+		
+		if (omp_get_thread_num() == 0)
+			tps = tstop-tstart;
+	
 		} // end of OMP region
-		tstop = omp_get_wtime();
 
 		perf[attempt][0] = tps1/100;
-		perf[attempt][1] = (tstop-tstart)/100 ;
+		perf[attempt][1] = tps/100 ;
 		
 		printf("#attempt = %d Fused loop time (seconds): %lf\n", attempt, perf[attempt][0]);
 		printf("#attempt = %d Total time (seconds): %lf\n", attempt, perf[attempt][1]);
@@ -113,9 +171,9 @@ for (int nthreads = 1; nthreads < 20; nthreads++){
 			double temp_num = 0.0;
 			for (int i = 0; i < atm->Nnodes * atm->Nvar; i++){
 				fread(&temp_num, sizeof(double), 1, file_ptr);
-				double abs_err = fabs(temp_num - H[i]);
+				double abs_err = fabs(temp_num - H_t[i]);
 				if (abs_err > 1E-10){
-					printf("%d %d %.16f %.16f\n", i/4, i%4, temp_num, H[i]);
+					printf("%d %d %.16f %.16f\n", i/4, i%4, temp_num, H_t[i]);
 					count++;
 				}
 			}
@@ -129,26 +187,26 @@ for (int nthreads = 1; nthreads < 20; nthreads++){
 		// ***** write outputs *****
 		
 		// ***** free variables *****
-		free(atm->x);
-		free(atm->y);
-		free(atm->z);
-		free(atm->f);
-		free(atm->ghm);
-		free(atm->p_u);
-		free(atm->p_v);
-		free(atm->p_w);
-		free(atm);
+		free(atm_t->x);
+		free(atm_t->y);
+		free(atm_t->z);
+		free(atm_t->f);
+		free(atm_t->ghm);
+		free(atm_t->p_u);
+		free(atm_t->p_v);
+		free(atm_t->p_w);
+		free(atm_t);
 
-		_mm_free(H);
+		free(H_t);
 
-		_mm_free(DP->idx);
-		_mm_free(DP->DPx);
-		_mm_free(DP->DPy);
-		_mm_free(DP->DPz);
-		_mm_free(DP->L);
-		free(DP);
+		free(DP_t->idx);
+		free(DP_t->DPx);
+		free(DP_t->DPy);
+		free(DP_t->DPz);
+		free(DP_t->L);
+		free(DP_t);
 
-		free(gradghm);	
+		free(gradghm_t);	
 		
 		_mm_free(F);
 		_mm_free(K);
@@ -199,49 +257,66 @@ void computeK ( const fType* H, const fType* F,
 			d[i] += d_coefficient * di;
 		}
 }
-	// ***** verify output H *****
-	/*
-	FILE* file_ptr = fopen("H_correct_binary.bin", "r");
+
+void allocateMemoryToThreads(	fType* H, fType* H_t,
+				DP_struct* DP, DP_struct* DP_t,
+				atm_struct* atm, atm_struct* atm_t,
+				fType* gradghm, fType* gradghm_t,
+				fType* F, fType* K,
+				int start_id, int end_id){
+	for (int i = start_id; i <= end_id; i++){
+		atm_t->x[i] = atm->x[i];
+		atm_t->y[i] = atm->y[i];
+		atm_t->z[i] = atm->z[i];
+		atm_t->f[i] = atm->f[i];
+		atm_t->ghm[i] = atm->ghm[i];	
 	
-	double temp_num = 0.0;
-	double abs_err = 0.0;
-	double rel_err = 0.0;
+		for (int j = 0; j < 3; j++){
+			atm_t->p_u[i*3+j] = atm->p_u[i*3+j];		
+			atm_t->p_v[i*3+j] = atm->p_v[i*3+j];		
+			atm_t->p_w[i*3+j] = atm->p_w[i*3+j];		
+			gradghm_t[i*3+j] = gradghm[i*3+j];
+		}
 
-	int rank1_count = 0;	// 0.1% rel_err or less
-	int rank2_count = 0;	// 0.1% -> 1%
-	int rank3_count = 0;	// 1% -> 10%
-	int rank4_count = 0;	// 10% -> 20%
-	int rank5_count = 0;	// > 20%
+		for (int inbr = 0; inbr < atm->Nnbr+1; inbr++){
+			DP_t->idx[i*(atm->Nnbr+1)+inbr] = DP->idx[i*(atm->Nnbr+1)+inbr];	
+			DP_t->DPx[i*(atm->Nnbr+1)+inbr] = DP->DPx[i*(atm->Nnbr+1)+inbr];	
+			DP_t->DPy[i*(atm->Nnbr+1)+inbr] = DP->DPy[i*(atm->Nnbr+1)+inbr];	
+			DP_t->DPz[i*(atm->Nnbr+1)+inbr] = DP->DPz[i*(atm->Nnbr+1)+inbr];	
+			DP_t->L[i*(atm->Nnbr+1)+inbr] = DP->L[i*(atm->Nnbr+1)+inbr];	
+		}
 
-        for (int i = 0; i < atm->Nnodes * atm->Nvar; i++){
-                fread(&temp_num, sizeof(double), 1, file_ptr);
-		abs_err = fabs(temp_num - H[i]);
-		
-		if (fabs(temp_num) < 0.000000000001)
-			rel_err = 100.0*abs_err/fabs(temp_num);
-		else 
-			rel_err = 0.0;
+		for (int ivar = 0; ivar < 4; ivar++){
+			H_t[i*4+ivar] = H[i*4+ivar];
+			F[i*4+ivar] = 0;
+			K[i*4+ivar] = 0;
+		}
 
-		if (rel_err < 0.1)
-			rank1_count++;
-		else if (rel_err < 1)
-			rank2_count++;
-		else if (rel_err < 10)
-			rank3_count++;
-		else if (rel_err < 20)
-			rank4_count++;
-		else {
-			rank5_count++;
-			//printf("%d %f %f\n", i, temp_num, H[i]);
-		}	
-        }
+	}	
 
-        fclose(file_ptr);
+	#pragma omp barrier
 
-	double total = atm->Nnodes * atm->Nvar;
-        printf("Relative error < 0.1%% :      %f\n", 100.0*(double)rank1_count/total);
-        printf("Relative error 0.1%% -> 1%% : %f\n", 100.0*(double)rank2_count/total);
-        printf("Relative error 1%% -> 10%% :  %f\n", 100.0*(double)rank3_count/total);
-        printf("Relative error 10%% -> 20%% : %f\n", 100.0*(double)rank4_count/total);
-        printf("Relative error > 20%% :       %f\n", 100.0*(double)rank5_count/total);
-	*/
+	if (omp_get_thread_num() == 0){
+		// ***** free variables *****
+		free(atm->x);
+		free(atm->y);
+		free(atm->z);
+		free(atm->f);
+		free(atm->ghm);
+		free(atm->p_u);
+		free(atm->p_v);
+		free(atm->p_w);
+		free(atm);
+
+		_mm_free(H);
+
+		_mm_free(DP->idx);
+		_mm_free(DP->DPx);
+		_mm_free(DP->DPy);
+		_mm_free(DP->DPz);
+		_mm_free(DP->L);
+		free(DP);
+
+		free(gradghm);	
+	}			
+} 
