@@ -11,7 +11,7 @@ OPT = -O3 -xHost
 ifeq ($(CC),gcc)
 	CFLAGS = $(OPT) -std=c99 -Wno-unused-result
 else
-	CFLAGS = $(OPT) -std=c99 -qopt-report=5 -fno-alias -openmp
+	CFLAGS = $(OPT) -std=c99 -qopt-report=5 -fno-alias #-openmp
 endif
 
 INC = ./include

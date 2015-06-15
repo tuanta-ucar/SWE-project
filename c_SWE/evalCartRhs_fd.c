@@ -45,11 +45,6 @@ void  evalCartRhs_fd( 	const fType* H,
 
 	// compute the (projected) Cartesian derivarives 
 	// applied to the velocity and geopotential
-	__assume_aligned(idx, 32);
-	__assume_aligned(DPx, 64);
-	__assume_aligned(DPy, 64);
-	__assume_aligned(DPz, 64);
-	__assume_aligned(L, 64);
 
 	// This is the computation for the right hand side 
 	// of the Cartesia momentum equation
@@ -61,15 +56,21 @@ void  evalCartRhs_fd( 	const fType* H,
 	fType Tz_i1, Tz_i2, Tz_i3, Tz_i4;
 	fType HV_i1, HV_i2, HV_i3, HV_i4;
 
+		__assume_aligned(idx, 32);
+		__assume_aligned(DPx, 64);
+		__assume_aligned(DPy, 64);
+		__assume_aligned(DPz, 64);
+		__assume_aligned(L, 64);
+		
 	__assume_aligned(H, 64);
 	__assume_aligned(F, 64);
 	
-	int chunk = Nnodes / 32;
+	int chunk = 128;
 
 	tstart = getTime();
 
 	// ####### Parallel region #######
-	#pragma omp parallel \
+	//#pragma omp parallel \
 		shared(	Nnodes,Nnbr,Nvar, \
 			DPx, DPy, DPz, L, \
 			H,F,gradghm,      \
@@ -85,7 +86,7 @@ void  evalCartRhs_fd( 	const fType* H,
 			p,q,s)			 \
 
 	{	
-	#pragma omp for schedule(static, chunk)
+	//#pragma omp for schedule(static, chunk)
 	for (int i = 0; i < Nnodes; i++){
 		Tx_i1 = 0.0;
 		Tx_i2 = 0.0; 
@@ -106,32 +107,34 @@ void  evalCartRhs_fd( 	const fType* H,
 		HV_i2 = 0.0; 
 		HV_i3 = 0.0; 
 		HV_i4 = 0.0; 
+	
+		__assume((i*(Nnbr+1))%16==0);
 		
 		for (int inbr = 0; inbr < Nnbr; inbr++){
 			int dp_idx = i*(Nnbr+1) + inbr;
 			int h_idx = idx[dp_idx] * Nvar;	   // neighbor's index in H
 			
-			fType dp_x = DPx[dp_idx];
+			// fType dp_x = DPx[dp_idx];
 			fType dp_y = DPy[dp_idx];
 			fType dp_z = DPz[dp_idx];
 			fType l = L[dp_idx];
 
-			Tx_i1 += dp_x * H[h_idx+0]; // DPx[i][inbr]*H[nbr_idx][ivar]
+			Tx_i1 += DPx[i*(Nnbr+1) + inbr] * H[h_idx+0]; // DPx[i][inbr]*H[nbr_idx][ivar]
 			Ty_i1 += dp_y * H[h_idx+0]; // DPy[i][inbr]*H[nbr_idx][ivar]
 			Tz_i1 += dp_z * H[h_idx+0]; // DPz[i][inbr]*H[nbr_idx][ivar]
 			HV_i1 += l * H[h_idx+0];   // L[i][inbr]*H[nbr_idx][ivar]
 			
-			Tx_i2 += dp_x * H[h_idx+1]; // DPx[i][inbr]*H[nbr_idx][ivar]
+			Tx_i2 += DPx[i*(Nnbr+1) + inbr] * H[h_idx+1]; // DPx[i][inbr]*H[nbr_idx][ivar]
 			Ty_i2 += dp_y * H[h_idx+1]; // DPy[i][inbr]*H[nbr_idx][ivar]
 			Tz_i2 += dp_z * H[h_idx+1]; // DPz[i][inbr]*H[nbr_idx][ivar]
 			HV_i2 += l * H[h_idx+1];   // L[i][inbr]*H[nbr_idx][ivar]
 			
- 			Tx_i3 += dp_x * H[h_idx+2]; // DPx[i][inbr]*H[nbr_idx][ivar]
+ 			Tx_i3 += DPx[i*(Nnbr+1) + inbr] * H[h_idx+2]; // DPx[i][inbr]*H[nbr_idx][ivar]
 			Ty_i3 += dp_y * H[h_idx+2]; // DPy[i][inbr]*H[nbr_idx][ivar]
 			Tz_i3 += dp_z * H[h_idx+2]; // DPz[i][inbr]*H[nbr_idx][ivar]
 			HV_i3 += l * H[h_idx+2];   // L[i][inbr]*H[nbr_idx][ivar]
 			
-			Tx_i4 += dp_x * H[h_idx+3]; // DPx[i][inbr]*H[nbr_idx][ivar]
+			Tx_i4 += DPx[i*(Nnbr+1) + inbr] * H[h_idx+3]; // DPx[i][inbr]*H[nbr_idx][ivar]
 			Ty_i4 += dp_y * H[h_idx+3]; // DPy[i][inbr]*H[nbr_idx][ivar]
 			Tz_i4 += dp_z * H[h_idx+3]; // DPz[i][inbr]*H[nbr_idx][ivar]
 			HV_i4 += l * H[h_idx+3];   // L[i][inbr]*H[nbr_idx][ivar]
