@@ -8,13 +8,16 @@ void computeK ( const fType* H, const fType* F,
 		const fType d_coefficient, const int d_num,
 		fType* K, fType* d);
 int main(){
-	FILE *prof_file = fopen("profiling_file.txt", "w");
 
-	for (int attempt = 0; attempt < 6; attempt++){
+for (int nthreads = 1; nthreads < 20; nthreads++){
+	omp_set_num_threads(nthreads);
+
+	int ntimes = 10;
+	double perf[ntimes][2];
+	
+	for (int attempt = 0; attempt < ntimes; attempt++){
 		// timing variables
-		long long tstart, tstop, tps;		// for main loop
-		long long tstart0, tstop0, tps0;	// for evalCartRhs_fd function
-		long long tps1, tps2;			// for 1st and 2nd loop in evalCartRhs_fd
+		double tstart, tstop, tps, tps1;
 
 		// constants
 		const fType gamma = -6.4e-22;
@@ -38,13 +41,20 @@ int main(){
 		// ***** main loop *****
 		fType* F = (fType*) _mm_malloc (sizeof(fType) * atm->Nnodes * atm->Nvar, 64);
 		fType* K = (fType*) _mm_malloc (sizeof(fType) * atm->Nnodes * atm->Nvar, 64);
-
 		fType* d = (fType*) calloc (atm->Nnodes*atm->Nvar, sizeof(fType));
 
-		tps0 = 0;
-		tps1 = 0;
+		tps = 0.0;
+		tps1 = 0.0;
 
-		tstart = getTime();
+		//__assume_aligned(DP->idx, 32);
+        	//__assume_aligned(DP->DPx, 64);
+        	//__assume_aligned(DP->DPy, 64);
+        	//__assume_aligned(DP->DPz, 64);
+        	//__assume_aligned(DP->L, 64);
+        	//__assume_aligned(H, 64);
+        	//__assume_aligned(F, 64);
+
+		tstart = omp_get_wtime();
 		// ########### Thread team created ############
 		#pragma omp parallel shared(atm,H,DP,gradghm,F,K,d,tps1)
 		{	
@@ -88,17 +98,14 @@ int main(){
 			}
 		}
 		} // end of OMP region
-		tstop = getTime();
+		tstop = omp_get_wtime();
 
-		tps = (tstop-tstart)/100 ;
-		tps0 = tps0/100;
-		tps1 = tps1/100;
+		perf[attempt][0] = tps1/100;
+		perf[attempt][1] = (tstop-tstart)/100 ;
+		
+		printf("#attempt = %d Fused loop time (seconds): %lf\n", attempt, perf[attempt][0]);
+		printf("#attempt = %d Total time (seconds): %lf\n", attempt, perf[attempt][1]);
 
-		printf("#attempt = %d Fused loop time (seconds): %lf\n", attempt, tps1*1e-6);
-		printf("#attempt = %d evalCartRhs_fd time (seconds): %lf\n", attempt, tps0*1e-6);
-		printf("#attempt = %d Total time (seconds): %lf\n", attempt, tps*1e-6);
-
-		fprintf(prof_file, "%lf\n%lf\n%lf\n\n", tps1*1e-6, tps0*1e-6, tps*1e-6);
 
 		// ======= DEBUGGING =========
 			int count = 0;	
@@ -149,7 +156,19 @@ int main(){
 		free(d);
 	} // end an attempt
 
+	FILE *prof_file = fopen("profiling_file.txt", "a");
+	
+	// write profiling time to a file
+	fprintf(prof_file,"nthreads = %d\n", nthreads);
+	for (int i = 0; i < ntimes; i++)
+		fprintf(prof_file, "%lf,", perf[i][0]);
+	fprintf(prof_file, "\n");
+	for (int i = 0; i < ntimes; i++)
+		fprintf(prof_file, "%lf,", perf[i][1]);
+	fprintf(prof_file, "\n\n");
+
 	fclose(prof_file);
+} // end of one nthread
 
 	return 0;
 }

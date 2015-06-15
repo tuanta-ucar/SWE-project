@@ -9,6 +9,6 @@ void evalCartRhs_fd(	const fType* H,
 			const atm_struct* atm,
 			const fType* gradghm,
 			fType* F,
-			long long* tps1);
+			double* tps1);
 
 #endif

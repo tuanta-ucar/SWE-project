@@ -34,11 +34,17 @@ implicit none
   integer :: dim = 2          ! dimension of stencil (on the sphere dim = 2)
   real*8  :: gamma = -6.4D-22 ! amount of hyperviscosity applied, multiplies Laplacian^order 
 
-  real*8, allocatable  :: DPx(:,:)
-  real*8, allocatable  :: DPy(:,:)
-  real*8, allocatable  :: DPz(:,:)
-  real*8, allocatable  :: Lmat(:,:)
-  integer, allocatable :: idx(:,:)
+!  real*8, allocatable  :: DPx(:,:)
+!  real*8, allocatable  :: DPy(:,:)
+!  real*8, allocatable  :: DPz(:,:)
+!  real*8, allocatable  :: Lmat(:,:)
+!  integer, allocatable :: idx(:,:)
+
+  real*8  :: DPx(Nnbr+1,Nnodes)
+  real*8  :: DPy(Nnbr+1,Nnodes)
+  real*8  :: DPz(Nnbr+1,Nnodes)
+  real*8  :: Lmat(Nnbr+1,Nnodes)
+  integer :: idx(Nnbr,Nnodes)
 
 end module derivs
 
@@ -50,9 +56,13 @@ implicit none
   ! Cartesian coordinates
   ! ================================
 
-  real*8, allocatable ::  x(:)
-  real*8, allocatable ::  y(:)
-  real*8, allocatable ::  z(:)
+!  real*8, allocatable ::  x(:)
+!  real*8, allocatable ::  y(:)
+!  real*8, allocatable ::  z(:)
+
+  real*8 x(Nnodes)
+  real*8 y(Nnodes)
+  real*8 z(Nnodes)
 
   ! ================================
   ! Spherical Coordinates:
@@ -80,10 +90,13 @@ implicit none
   real*8 p_v(Nnodes,3)
   real*8 p_w(Nnodes,3)
 
-  real*8, allocatable :: p_u_t(:,:)
-  real*8, allocatable :: p_v_t(:,:)
-  real*8, allocatable :: p_w_t(:,:)
+!  real*8, allocatable :: p_u_t(:,:)
+!  real*8, allocatable :: p_v_t(:,:)
+!  real*8, allocatable :: p_w_t(:,:)
 
+  real*8 p_u_t(3,Nnodes)
+  real*8 p_v_t(3,Nnodes)
+  real*8 p_w_t(3,Nnodes)
 end module coords
 
 module times
@@ -103,7 +116,8 @@ program swe
   use times
 implicit none
 
-  real*8, allocatable :: fcor(:)
+!  real*8, allocatable :: fcor(:)
+  real*8 fcor(Nnodes)
 
   ! =======================
   ! Initial state variables
@@ -111,7 +125,8 @@ implicit none
 
   real*8 gh(Nnodes)
   real*8 uc(Nnodes,3)
-  real*8, allocatable :: ghm(:)
+!  real*8, allocatable :: ghm(:)
+  real*8 ghm(Nnodes)
   real*8 gradghm(Nnodes,3)
 
   real*8 nodes(NNodes,3)
@@ -126,13 +141,18 @@ implicit none
   real*8 d4(Nvar,Nnodes)
 
   ! Transposed versions of H,F,K
-  real*8, allocatable :: H_t(:,:)
-  real*8, allocatable :: F_t(:,:)
-  real*8, allocatable :: K_t(:,:)
-
+!  real*8, allocatable :: H_t(:,:)
+!  real*8, allocatable :: F_t(:,:)
+!  real*8, allocatable :: K_t(:,:)
+  real*8 H_t(Nvar,Nnodes)
+  real*8 F_t(Nvar,Nnodes)
+  real*8 K_t(Nvar,Nnodes)
+ 
   ! Transposed versions of uc, gradghm
-  real*8, allocatable :: uc_t(:,:)
-  real*8, allocatable :: gradghm_t(:,:)
+!  real*8, allocatable :: uc_t(:,:)
+!  real*8, allocatable :: gradghm_t(:,:)
+  real*8 uc_t(3,Nnodes)
+  real*8 gradghm_t(3,Nnodes)
 
   real*8 ra
   real*8 sum1
@@ -146,20 +166,20 @@ implicit none
   integer :: nt
   integer :: i, inbr
   integer :: j
-  integer :: recNum=1    !used to read binary file
+  integer :: recNum      !used to read binary file
   real*8 :: tempNum      !used to store value read from binary file
-
+  integer :: attempt     !used to run the program multiple times
   !=========== Allocate arrays ===================
-  allocate(DPx(Nnbr+1,Nnodes),DPy(Nnbr+1,Nnodes), &
-           DPz(Nnbr+1,Nnodes),Lmat(Nnbr+1,Nnodes))
-  allocate(idx(Nnbr,Nnodes))
-  allocate(x(Nnodes),y(Nnodes),z(Nnodes))
-  allocate(p_u_t(3,Nnodes),p_v_t(3,Nnodes),p_w_t(3,Nnodes))
-  allocate(H_t(Nvar,Nnodes),F_t(Nvar,Nnodes),K_t(Nvar,Nnodes))
-  allocate(uc_t(3,Nnodes),gradghm_t(3,Nnodes))
-  allocate(ghm(Nnodes),fcor(Nnodes))
+!  allocate(DPx(Nnbr+1,Nnodes),DPy(Nnbr+1,Nnodes), &
+!           DPz(Nnbr+1,Nnodes),Lmat(Nnbr+1,Nnodes))
+!  allocate(idx(Nnbr,Nnodes))
+!  allocate(x(Nnodes),y(Nnodes),z(Nnodes))
+!  allocate(p_u_t(3,Nnodes),p_v_t(3,Nnodes),p_w_t(3,Nnodes))
+!  allocate(H_t(Nvar,Nnodes),F_t(Nvar,Nnodes),K_t(Nvar,Nnodes))
+!  allocate(uc_t(3,Nnodes),gradghm_t(3,Nnodes))
+!  allocate(ghm(Nnodes),fcor(Nnodes))
   !=========== End of array allocation ===========
-
+  
   open(UNIT=7,FILE="icos163842",STATUS="OLD")
   do i=1,Nnodes
      read(7,*)nodes(i,1),nodes(i,2),nodes(i,3)
@@ -172,110 +192,113 @@ implicit none
 
   call tc5(ghm,gradghm,gh,uc)
 
-  H(:,1:3)=uc(:,1:3)
-  H(:,4) = gh(:)
-  fcor(:) = 2.0D0*omega*(-x(:)*sin(alpha) + z(:)*cos(alpha))   ! Coriolis force
+  do attempt=0,10
+     H(:,1:3)=uc(:,1:3)
+     H(:,4) = gh(:)
+     fcor(:) = 2.0D0*omega*(-x(:)*sin(alpha) + z(:)*cos(alpha))   ! Coriolis force
 
-  !=======================
-  ! Optimization: Transpose H, gradghm to get more efficient memory access
-  H_t = transpose(H)
-  gradghm_t = transpose(gradghm)
-  uc_t = transpose(uc)
-  !=======================
+     !=======================
+     ! Optimization: Transpose H, gradghm to get more efficient memory access
+     H_t = transpose(H)
+     gradghm_t = transpose(gradghm)
+     uc_t = transpose(uc)
+     !=======================
 
-  ! Initialize timing variables
-  tps0=0.0D0
-  tps1=0.0D0
+     ! Initialize timing variables
+     tps1=0.0D0
 
-  call cpu_time(tstart)
-  do  nt=1,100!nsteps
-
-      ! 
-      ! Fourth Order Runge-Kutta timestepping
-      !
-
-      K_t = H_t
-      
-      call cpu_time(tstart0)
-      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
-      call cpu_time(tstop0)
-      tps0=tps0+(tstop0-tstart0)
-      
-      d1=dt*F_t
-      K_t = H_t + 0.5D0*d1
-
-      call cpu_time(tstart0)
-      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
-      call cpu_time(tstop0)
-      tps0=tps0+(tstop0-tstart0)
-
-      d2 = dt*F_t
-      K_t = H_t + 0.5D0*d2
-      
-      call cpu_time(tstart0)
-      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
-      call cpu_time(tstop0)
-      tps0=tps0+(tstop0-tstart0)
-
-      d3 = dt*F_t
-      K_t = H_t + d3
-      
-      call cpu_time(tstart0)
-      call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
-      call cpu_time(tstop0)
-      tps0=tps0+(tstop0-tstart0)
-      
-      d4 = dt*F_t
-      H_t = H_t + (1.0D0/6.0D0)*(d1 + 2.0D0*d2 + 2.0D0*d3 + d4)
-
-  end do
-  call cpu_time(tstop)
-
-  !==================
-  ! transpose H_t back to H for verification purpose
-  H = transpose(H_t)
-  !==================
-
-  ! per-step time
-  tps = (tstop-tstart)/100
-  tps0 = tps0/100
-  tps1 = tps1/100
-
-  print *, "Time for the fused loop ", tps1
-  print *, "Time for evalCartRhs ", tps0 
-  print *, "Total (per step) ", tps
-  
-  ! Verify output by checking H matrix
-  open(UNIT=22, FILE="H_debug.bin", STATUS="OLD", &
-          FORM="UNFORMATTED", ACCESS="DIRECT", RECL=8)
-
-  recNum=1
-  
-  do i=1,Nnodes
-     do j=1, Nvar
-       read(22, rec=recNum) tempNum
-
-       if (ABS(H(i,j) - tempNum) > 1D-10) then
-         print *, H(i,j), tempNum
-       end if
- 
-       recNum = recNum + 1
+     tstart = omp_get_wtime()
+   
+   !$OMP PARALLEL &
+   !$OMP SHARED (idx,DPx,DPy,DPz,Lmat, &
+   !$OMP         H_t,F_t,gradghm_t,&
+   !$OMP         x,y,z,fcor,       &
+   !$OMP         ghm,p_u_t,p_v_t,p_w_t,tps1)
+     do  nt=1,100 !nsteps
+         ! Fourth Order Runge-Kutta timestepping
+   !$OMP SINGLE
+         K_t = H_t
+   !$OMP END SINGLE 
+         
+         call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
+   
+   !$OMP SINGLE      
+         d1=dt*F_t
+         K_t = H_t + 0.5D0*d1
+   !$OMP END SINGLE
+   
+         call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
+   
+   !$OMP SINGLE
+         d2 = dt*F_t
+         K_t = H_t + 0.5D0*d2
+   !$OMP END SINGLE
+         
+         call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
+   
+   !$OMP SINGLE
+         d3 = dt*F_t
+         K_t = H_t + d3
+   !$OMP END SINGLE
+         
+         call evalCartRhs(fcor,ghm,gradghm_t,K_t,F_t, tps1)
+   
+   !$OMP SINGLE      
+         d4 = dt*F_t
+         H_t = H_t + (1.0D0/6.0D0)*(d1 + 2.0D0*d2 + 2.0D0*d3 + d4)
+   !$OMP END SINGLE
+   
      end do
-  end do
+   !$OMP END PARALLEL
+   
+     tstop = omp_get_wtime()
+   
+     !==================
+     ! transpose H_t back to H for verification purpose
+     H = transpose(H_t)
+     !==================
+   
+     ! per-step time
+     tps = (tstop-tstart)/100
+     tps1 = tps1/100
+   
+     print *, "Time for the fused loop ", tps1
+     print *, "Total (per step) ", tps
+     
+     ! ====== Verify output by checking H matrix =======
+     open(UNIT=22, FILE="H_debug.bin", STATUS="OLD", &
+             FORM="UNFORMATTED", ACCESS="DIRECT", RECL=8)
+   
+     recNum=1
+     
+     do i=1,Nnodes
+        do j=1, Nvar
+          read(22, rec=recNum) tempNum
+   
+          if (ABS(H(i,j) - tempNum) > 1D-10) then
+            print *, H(i,j), tempNum
+          end if
+    
+          recNum = recNum + 1
+        end do
+     end do
+   
+     close(UNIT=22)
+     !===================================================
+   
+     tps=(tstop-tstart)/nsteps
+     print *,(Nnodes*(4.0D0*(8.0D0*Nnbr*Nvar+64.0D0)+Nvar*16.0D0)*1.0D-9)/tps
 
-  close(UNIT=22)
+end do ! end of an attempt 
 
-  tps=(tstop-tstart)/nsteps
-  print *,(Nnodes*(4.0D0*(8.0D0*Nnbr*Nvar+64.0D0)+Nvar*16.0D0)*1.0D-9)/tps
-
-  !=========== Deallocate arrays ===================
-  deallocate(DPx,DPy,DPz,Lmat)
-  deallocate(idx)
-  deallocate(x,y,z)
-  deallocate(p_u_t,p_v_t,p_w_t)
-  deallocate(H_t,F_t,K_t)
-  deallocate(uc_t,gradghm_t)
-  deallocate(ghm,fcor)
+  !========== Deallocate arrays ===================
+!  deallocate(DPx,DPy,DPz,Lmat)
+!  deallocate(idx)
+!  deallocate(x,y,z)
+!  deallocate(p_u_t,p_v_t,p_w_t)
+!  deallocate(H_t,F_t,K_t)
+!  deallocate(uc_t,gradghm_t)
+!  deallocate(ghm,fcor)
   !=========== End of array allocation ===========
 end program swe
 
@@ -404,7 +427,7 @@ real*8, intent(in)  ::  gradghm_t(3,NNodes)
 real*8, intent(in)  ::  H_t(Nvar,Nnodes)
 real*8, intent(out) ::  F_t(Nvar,Nnodes)
 
-real*8, intent(out) ::  tps1   ! timing variable for 1st loop
+real*8, intent(out) ::  tps1 
 
 integer :: i, inbr, ivar
 
@@ -419,43 +442,16 @@ real*8 Ty_i1, Ty_i2, Ty_i3, Ty_i4
 real*8 Tz_i1, Tz_i2, Tz_i3, Tz_i4
 real*8 HV_i1, HV_i2, HV_i3, HV_i4
 real*8 nbr_id
-
 real*8 dp_x, dp_y, dp_z, l_mat
 
-integer Nthreads, chunk
-!
 ! Compute the (projected) Cartesian derivatives applied to the velocity
 ! and geopotential.
-!
-
-Nthreads = 8
-chunk = Nnodes / Nthreads
 
 tstart = omp_get_wtime()
 
-!$OMP PARALLEL &
-!a$OMP SHARED (idx,DPx,DPy,DPz,Lmat, &
-!a$OMP         H_t,F_t,gradghm_t,&
-!a$OMP         x,y,z,fcor,       &
-!a$OMP         ghm,p_u_t,p_v_t,p_w_t) &
-!$OMP PRIVATE (Tx_i1,Tx_i2,Tx_i3,Tx_i4, &
-!$OMP          Ty_i1,Ty_i2,Ty_i3,Ty_i4, &
-!$OMP          Tz_i1,Tz_i2,Tz_i3,Tz_i4, &
-!$OMP          HV_i1,HV_i2,HV_i3,HV_i4, &
-!$OMP          H_i1,H_i2,H_i3,H_i4,     &
-!$OMP          p,q,s,                   &
-!$OMP	       i,inbr,			& 
-!$OMP          nbr_id,dp_x,dp_y,dp_z,l_mat)  &
-!$OMP NUM_THREADS(Nthreads)
-
-!$OMP DO SCHEDULE(STATIC,chunk)
-do i=1,Nnodes   ! 1st loop to be optimized
-
-   ! 
+!$OMP DO SCHEDULE(STATIC)
+do i=1,Nnodes
    ! FLOPS1 = 8*Nnbr*Nvar (assumes precalculate DP{x,y,z}/a)
-   !
-   !
-
    Tx_i1 = 0.0D0
    Tx_i2 = 0.0D0
    Tx_i3 = 0.0D0
@@ -544,10 +540,12 @@ do i=1,Nnodes   ! 1st loop to be optimized
 
 end do
 !$OMP END DO 
-!$OMP END PARALLEL
 
 tstop = omp_get_wtime()
-tps1 = tps1 + (tstop-tstart)
+
+if (omp_get_thread_num() .EQ. 0) then
+   tps1 = tps1 + (tstop-tstart)
+end if
 
 ! FLOPS = Nnodes*(8*Nnbr*Nvar+64)
 
