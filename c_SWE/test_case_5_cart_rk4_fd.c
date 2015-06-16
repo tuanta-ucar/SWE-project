@@ -19,7 +19,7 @@ int main(){
 for (int nthreads = 1; nthreads <= 32; nthreads++){
 	omp_set_num_threads(nthreads);
 
-	int ntimes = 10;
+	int ntimes = 1;
 	double perf[ntimes][2];
 	
 	for (int attempt = 0; attempt < ntimes; attempt++){
