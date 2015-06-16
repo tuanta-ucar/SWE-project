@@ -70,7 +70,7 @@ void  evalCartRhs_fd( 	const fType* H,
 	tstart = getTime();
 
 	// ####### Parallel region #######
-	//#pragma omp parallel \
+	#pragma omp parallel \
 		shared(	Nnodes,Nnbr,Nvar, \
 			DPx, DPy, DPz, L, \
 			H,F,gradghm,      \
@@ -86,7 +86,7 @@ void  evalCartRhs_fd( 	const fType* H,
 			p,q,s)			 \
 
 	{	
-	//#pragma omp for schedule(static, chunk)
+	#pragma omp for schedule(static, chunk)
 	for (int i = 0; i < Nnodes; i++){
 		Tx_i1 = 0.0;
 		Tx_i2 = 0.0; 
