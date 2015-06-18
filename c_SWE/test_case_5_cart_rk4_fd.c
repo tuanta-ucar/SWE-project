@@ -1,6 +1,7 @@
 #include <readInputs.h>
 #include <evalCartRhs_fd.h>
 #include <timer.h>
+#include <reorderNodes.h>
 
 void computeK ( const fType* H, const fType* F, 
 		const fType dt, const fType coefficient,
@@ -16,10 +17,10 @@ void allocateMemoryToThreads(	fType* H, fType* H_t,
 				int start_id, int end_id);	 
 int main(){
 
-for (int nthreads = 1; nthreads <= 32; nthreads++){
+for (int nthreads = 16; nthreads <= 16; nthreads++){
 	omp_set_num_threads(nthreads);
 
-	int ntimes = 5;
+	int ntimes = 1;
 	double perf[ntimes][2];
 	
 	for (int attempt = 0; attempt < ntimes; attempt++){
@@ -45,6 +46,9 @@ for (int nthreads = 1; nthreads <= 32; nthreads++){
 		// read gradghm
 		fType* gradghm = read_gradghm(atm->Nnodes);
 
+		// reorder node indices. mapping[new_id] = old_id
+		int* mapping = reorderNodes(H, DP, atm, gradghm);
+		
 		// ***** main loop *****
 		fType* F = (fType*) _mm_malloc (sizeof(fType) * atm->Nnodes * atm->Nvar, 64);
 		fType* K = (fType*) _mm_malloc (sizeof(fType) * atm->Nnodes * atm->Nvar, 64);
@@ -168,23 +172,27 @@ for (int nthreads = 1; nthreads <= 32; nthreads++){
 		// ======= DEBUGGING =========
 			int count = 0;	
 			FILE* file_ptr = fopen("H_debug.bin", "r");
-			double temp_num = 0.0;
-			for (int i = 0; i < atm->Nnodes * atm->Nvar; i++){
-				fread(&temp_num, sizeof(double), 1, file_ptr);
-				double abs_err = fabs(temp_num - H_t[i]);
-				if (abs_err > 1E-10){
-					printf("%d %d %.16f %.16f\n", i/4, i%4, temp_num, H_t[i]);
-					count++;
+
+			double* correctH = (double*) malloc (sizeof(double)*atm->Nnodes * atm->Nvar);
+			fread(correctH, sizeof(double), atm->Nnodes * atm->Nvar, file_ptr);
+			fclose(file_ptr);
+			
+			for (int i = 0; i < atm->Nnodes; i++){
+				for (int j = 0; j < atm->Nvar; j++){
+					double abs_err = fabs(H_t[i*4+j] - correctH[mapping[i]*4+j]);
+					if (abs_err > 1E-10){
+						printf("%d %d %.16f %.16f\n", i/4, i%4, H_t[i*4+j], correctH[mapping[i]*4+j]);
+						count++;
+					}
 				}
 			}
 		
 			if (count == 0)	
 				printf("No difference that is larger than 1e-10 btw Matlab and C versions\n");
-
-			fclose(file_ptr);
+			
+			free(correctH);
 		// ====== END OF DEBUGGING ======
 
-		// ***** write outputs *****
 		
 		// ***** free variables *****
 		free(atm_t->x);
@@ -212,6 +220,7 @@ for (int nthreads = 1; nthreads <= 32; nthreads++){
 		_mm_free(K);
 
 		free(d);
+		free(mapping);
 	} // end an attempt
 
 	FILE *prof_file = fopen("profiling_file.txt", "a");
@@ -319,4 +328,4 @@ void allocateMemoryToThreads(	fType* H, fType* H_t,
 
 		free(gradghm);	
 	}			
-} 
+}

@@ -5,25 +5,24 @@
 #CC = gcc
 CC = icc
 
-OPT = -O3 -xHost
+OPT = -O3 
 
 # Compile-time flags
 ifeq ($(CC),gcc)
 	CFLAGS = $(OPT) -std=c99 -Wno-unused-result
 else
-	CFLAGS = $(OPT) -std=c99 -qopt-report=5 -fno-alias -openmp
+	CFLAGS = $(OPT) -xHost -std=c99 -qopt-report=5 -fno-alias -openmp
 endif
 
 INC = ./include
 
-SRCS = readInputs.c timer.c evalCartRhs_fd.c test_case_5_cart_rk4_fd.c
+SRCS = reorderNodes.c readInputs.c timer.c evalCartRhs_fd.c test_case_5_cart_rk4_fd.c
 
 LIB = 
 
 EXE = swe
 
 all: test_case_5_cart_rk4_fd.c 
-	$(CC) $(CFLAGS) -I$(INC) $(SRCS) $(LIB) -o $(EXE)
-
+	$(CC) -g $(CFLAGS) -I$(INC) $(SRCS) $(LIB) -o $(EXE)
 clean: 
 	rm ./swe
