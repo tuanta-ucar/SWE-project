@@ -17,10 +17,15 @@ void allocateMemoryToThreads(	fType* H, fType* H_t,
 				int start_id, int end_id);	 
 int main(){
 
-for (int nthreads = 16; nthreads <= 16; nthreads++){
+FILE *prof_file = fopen("profiling_file.txt", "w");
+int nthreads = 16;
+	
+for (int chunkSize = 200; chunkSize <= 10000; chunkSize += 400){
+	printf("chunkSize = %d\n", chunkSize);
+
 	omp_set_num_threads(nthreads);
 
-	int ntimes = 1;
+	int ntimes = 10;
 	double perf[ntimes][2];
 	
 	for (int attempt = 0; attempt < ntimes; attempt++){
@@ -87,28 +92,34 @@ for (int nthreads = 16; nthreads <= 16; nthreads++){
 		tps = 0.0;
 		tps1 = 0.0;
 
+		int start1 = 0;	// starting index for the first 8 threads
+		int start2 = atm->Nnodes/2 + 1;	// starting index for the second 8 threads
+
 		// ########### Thread team created ############
-		#pragma omp parallel shared(atm,H,DP,gradghm,F,K,d,tps1,tps,\
-						atm_t,H_t,DP_t,gradghm_t)
+		#pragma omp parallel shared(atm,H,DP,gradghm,F,K,d,		\
+						atm_t,H_t,DP_t,gradghm_t, 	\
+						start1, start2, chunkSize,	\
+						tps1, tps)
 		{
+		// ***************  Preprocessing *********************
 		// thread allocation
 		int thread_id = omp_get_thread_num();
-		int chunkSize = atm->Nnodes/nthreads;
+		int size = atm->Nnodes/nthreads;
 
 		int start_id, end_id;
 
 		if (thread_id != nthreads-1){
-			start_id = thread_id*chunkSize;
-			end_id = (thread_id+1)*chunkSize-1;
+			start_id = thread_id*size;
+			end_id = (thread_id+1)*size-1;
 		} else {
-			start_id = thread_id*chunkSize;
+			start_id = thread_id*size;
 			end_id = atm->Nnodes-1;
 		}
 
-
 		// Allocate memory to threads 
 		allocateMemoryToThreads(H, H_t, DP, DP_t, atm, atm_t, gradghm, gradghm_t, F, K, start_id, end_id);
-		
+		// *****************************************************		
+
 		#pragma omp barrier
 	
 		double tstart = omp_get_wtime();
@@ -120,32 +131,40 @@ for (int nthreads = 16; nthreads <= 16; nthreads++){
 			}
 
 			
-			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, start_id, end_id, &tps1);
+			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, &start1, &start2, chunkSize, &tps1);
 			
 			#pragma omp single
 			{
 			computeK(H_t, F, dt, 0.5, atm_t->Nnodes, atm_t->Nvar, 1.0, 1, K, d);
+			start1 = 0;
+			start2 = atm_t->Nnodes/2;
 			}
 
-			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, start_id, end_id, &tps1);
+			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, &start1, &start2, chunkSize, &tps1);
 			
 			#pragma omp single
 			{			
 			computeK(H_t, F, dt, 0.5, atm_t->Nnodes, atm_t->Nvar, 2.0, 2, K, d);
+			start1 = 0;
+			start2 = atm_t->Nnodes/2;
 			}
 
-			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, start_id, end_id, &tps1);
+			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, &start1, &start2, chunkSize, &tps1);
 
 			#pragma omp single
 			{			
 			computeK(H_t, F, dt, 1.0, atm_t->Nnodes, atm_t->Nvar, 2.0, 3, K, d);
+			start1 = 0;
+			start2 = atm_t->Nnodes/2;
 			}
 
-			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, start_id, end_id, &tps1);
+			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, &start1, &start2, chunkSize, &tps1);
 			
 			#pragma omp single
 			{			
 			computeK(H_t, F, dt, 1.0, atm_t->Nnodes, atm_t->Nvar, 1.0, 4, K, d);
+			start1 = 0;
+			start2 = atm_t->Nnodes/2;
 
 			// update H
 			for (int i = 0; i < atm_t->Nnodes * atm_t->Nvar; i++){
@@ -173,12 +192,12 @@ for (int nthreads = 16; nthreads <= 16; nthreads++){
 			int count = 0;	
 			FILE* file_ptr = fopen("H_debug.bin", "r");
 
-			double* correctH = (double*) malloc (sizeof(double)*atm->Nnodes * atm->Nvar);
-			fread(correctH, sizeof(double), atm->Nnodes * atm->Nvar, file_ptr);
+			double* correctH = (double*) malloc (sizeof(double)*atm_t->Nnodes * atm_t->Nvar);
+			fread(correctH, sizeof(double), atm_t->Nnodes * atm_t->Nvar, file_ptr);
 			fclose(file_ptr);
 			
-			for (int i = 0; i < atm->Nnodes; i++){
-				for (int j = 0; j < atm->Nvar; j++){
+			for (int i = 0; i < atm_t->Nnodes; i++){
+				for (int j = 0; j < atm_t->Nvar; j++){
 					double abs_err = fabs(H_t[i*4+j] - correctH[mapping[i]*4+j]);
 					if (abs_err > 1E-10){
 						printf("%d %d %.16f %.16f\n", i/4, i%4, H_t[i*4+j], correctH[mapping[i]*4+j]);
@@ -192,7 +211,6 @@ for (int nthreads = 16; nthreads <= 16; nthreads++){
 			
 			free(correctH);
 		// ====== END OF DEBUGGING ======
-
 		
 		// ***** free variables *****
 		free(atm_t->x);
@@ -223,10 +241,8 @@ for (int nthreads = 16; nthreads <= 16; nthreads++){
 		free(mapping);
 	} // end an attempt
 
-	FILE *prof_file = fopen("profiling_file.txt", "a");
-	
 	// write profiling time to a file
-	fprintf(prof_file,"nthreads = %d\n", nthreads);
+	fprintf(prof_file,"chunkSize = %d\n", chunkSize);
 	for (int i = 0; i < ntimes; i++)
 		fprintf(prof_file, "%lf,", perf[i][0]);
 	fprintf(prof_file, "\n");
@@ -234,9 +250,9 @@ for (int nthreads = 16; nthreads <= 16; nthreads++){
 		fprintf(prof_file, "%lf,", perf[i][1]);
 	fprintf(prof_file, "\n\n");
 
-	fclose(prof_file);
 } // end of one nthread
 
+	fclose(prof_file);
 	return 0;
 }
 
