@@ -44,7 +44,6 @@ void  evalCartRhs_fd( 	const fType* H,
 	// timing variables
 	double tstart, tstop;
 
-	/*
 	__assume_aligned(idx, 32);
 	__assume_aligned(DPx, 64);
 	__assume_aligned(DPy, 64);
@@ -52,7 +51,6 @@ void  evalCartRhs_fd( 	const fType* H,
 	__assume_aligned(L, 64);
 	__assume_aligned(H, 64);
 	__assume_aligned(F, 64);
-	*/
 
 	// This is the computation for the right hand side 
 	// of the Cartesia momentum equation
