@@ -175,6 +175,9 @@ void freeCudaMem(fType* H_d, atm_struct* atm_d, DP_struct* DP_d, fType* gradghm_
 
 	err = cudaFree(K_d);
 	checkError(err);
+
+	err = cudaDeviceReset();
+	checkError(err);
 }
 
 void checkError(cudaError_t err){ 

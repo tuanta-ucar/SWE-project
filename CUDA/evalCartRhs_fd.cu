@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include <evalCartRhs_fd.h>
 #include <cuda.h>
+#include <cuda_profiler_api.h>
 
 #define BLOCK_SIZE 256
 
@@ -184,6 +185,9 @@ printf("Shared mem size = %ld\n", sharedMemSize);
 printf("nWarps = %d\n", nWarpsPerBlock);
 printf("nBlocks = %d\n", nBlocksPerGrid);
 */
+
+cudaProfilerStart();
+
 	// Launch kernel
 	evalCartRhs_fd<<<nBlocksPerGrid, BLOCK_SIZE, sharedMemSize>>>(H_d, idx, DPx, DPy, DPz, L,
 									 x, y, z, f, ghm,
@@ -194,4 +198,6 @@ printf("nBlocks = %d\n", nBlocksPerGrid);
 	
 	// wait for kernel to complete
 	cudaDeviceSynchronize();
-} 
+cudaProfilerStop();
+
+}
