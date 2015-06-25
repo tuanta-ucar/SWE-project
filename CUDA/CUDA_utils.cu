@@ -10,6 +10,8 @@ void setupDevices(){
         err = cudaGetDeviceCount(&deviceCount);
         checkError(err);
 
+	printf("Number of devices: %d\n", deviceCount);
+
         for (int i = 0; i < deviceCount; i++){
                 cudaDeviceProp props;
                 err = cudaGetDeviceProperties(&props, i);

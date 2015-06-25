@@ -57,8 +57,11 @@ int main(){
                       		(void**)&H_d, atm_d, DP_d, (void**)&gradghm_d, (void**)&F_d, (void**)&K_d);
 	// **************************************************************
 
+
 	// ***** main loop *****
 	for (int nt = 1; nt <= 1; nt++){   // tend*24*3600
+		printf("Step %d\n", nt);
+
 // -----------------------
 		memcpy(K, H, sizeof(fType) * Nnodes * Nvar); // K = H
 		
@@ -83,6 +86,9 @@ int main(){
 		// copy F_d -> F 
 		copyGPUtoCPU(F, F_d, sizeof(fType)*Nnodes*Nvar);
 
+		for (int i = 0; i < Nnodes*Nvar; i++)
+			printf("%f\n", F[i]);
+/*
 		computeK(H, F, dt, 0.5, Nnodes, Nvar, 2.0, 2, K, d);
 // ------------------------
 		// copy K -> K_d 
@@ -111,10 +117,10 @@ int main(){
 		for (int i = 0; i < Nnodes * Nvar; i++){
 			H[i] += (1.0/6.0) * d[i];
 		}
+*/
 	}
-
-	// ======= DEBUGGING =========
 /*
+	// ======= DEBUGGING =========
 	int count = 0;	
 	FILE* file_ptr = fopen("H_debug.bin", "r");
 
@@ -125,10 +131,10 @@ int main(){
 	for (int i = 0; i < atm->Nnodes; i++){
 		for (int j = 0; j < atm->Nvar; j++){
 			double abs_err = fabs(H[i*4+j] - correctH[mapping[i]*4+j]);
-			if (abs_err > 1E-10){
+			//if (abs_err < 1E-10){
 				printf("%d %d %.16f %.16f\n", i/4, i%4, H[i*4+j], correctH[mapping[i]*4+j]);
 				count++;
-			}
+			//}
 		}
 	}
 
@@ -136,9 +142,8 @@ int main(){
 		printf("No difference that is larger than 1e-10 btw Matlab and C versions\n");
 	
 	free(correctH);
-*/
 	// ====== END OF DEBUGGING ======
-	
+*/	
 	// ***** free variables *****
 	free(atm->x);
 	free(atm->y);
