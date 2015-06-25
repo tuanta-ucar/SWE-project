@@ -58,7 +58,9 @@ int main(){
 	// **************************************************************
 
 	// ***** main loop *****
-	for (int nt = 1; nt <= 1; nt++){   // tend*24*3600
+	for (int nt = 1; nt <= 100; nt++){   // tend*24*3600
+		printf("Step %d \n", nt);
+
 // -----------------------
 		memcpy(K, H, sizeof(fType) * Nnodes * Nvar); // K = H
 		
@@ -114,7 +116,7 @@ int main(){
 	}
 
 	// ======= DEBUGGING =========
-/*
+
 	int count = 0;	
 	FILE* file_ptr = fopen("H_debug.bin", "r");
 
@@ -136,7 +138,7 @@ int main(){
 		printf("No difference that is larger than 1e-10 btw Matlab and C versions\n");
 	
 	free(correctH);
-*/
+
 	// ====== END OF DEBUGGING ======
 	
 	// ***** free variables *****
