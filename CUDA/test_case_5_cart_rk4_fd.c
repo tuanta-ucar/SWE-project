@@ -57,9 +57,14 @@ int main(){
                       		(void**)&H_d, atm_d, DP_d, (void**)&gradghm_d, (void**)&F_d, (void**)&K_d);
 	// **************************************************************
 
-
+	// TODO DEBUGGING
+	printf("node = %d DPx[0] = %f\n", 10850, DP->DPy[10850*32+0]);
+	printf("node = %d DPx[0] = %f\n", 10851, DP->DPy[10851*32+0]);
+	printf("node = %d DPx[0] = %f\n", 10852, DP->DPy[10852*32+0]);
+	printf("node = %d DPx[0] = %f\n", 10853, DP->DPy[10853*32+0]);
+	
 	// ***** main loop *****
-	for (int nt = 1; nt <= 1; nt++){   // tend*24*3600
+	for (int nt = 1; nt <= 100; nt++){   // tend*24*3600
 		printf("Step %d\n", nt);
 
 // -----------------------
@@ -86,9 +91,6 @@ int main(){
 		// copy F_d -> F 
 		copyGPUtoCPU(F, F_d, sizeof(fType)*Nnodes*Nvar);
 
-		for (int i = 0; i < Nnodes*Nvar; i++)
-			printf("%f\n", F[i]);
-/*
 		computeK(H, F, dt, 0.5, Nnodes, Nvar, 2.0, 2, K, d);
 // ------------------------
 		// copy K -> K_d 
@@ -117,13 +119,13 @@ int main(){
 		for (int i = 0; i < Nnodes * Nvar; i++){
 			H[i] += (1.0/6.0) * d[i];
 		}
-*/
 	}
-/*
+
 	// ======= DEBUGGING =========
 	int count = 0;	
-	FILE* file_ptr = fopen("H_debug.bin", "r");
+//	FILE* file_ptr = fopen("H_debug_1_step.bin", "r");
 
+	FILE* file_ptr = fopen("H_debug.bin", "r");
 	double* correctH = (double*) malloc (sizeof(double)*atm->Nnodes * atm->Nvar);
 	fread(correctH, sizeof(double), atm->Nnodes * atm->Nvar, file_ptr);
 	fclose(file_ptr);
@@ -131,10 +133,10 @@ int main(){
 	for (int i = 0; i < atm->Nnodes; i++){
 		for (int j = 0; j < atm->Nvar; j++){
 			double abs_err = fabs(H[i*4+j] - correctH[mapping[i]*4+j]);
-			//if (abs_err < 1E-10){
+			if (abs_err < 1E-10){
 				printf("%d %d %.16f %.16f\n", i/4, i%4, H[i*4+j], correctH[mapping[i]*4+j]);
 				count++;
-			//}
+			}
 		}
 	}
 
@@ -142,8 +144,9 @@ int main(){
 		printf("No difference that is larger than 1e-10 btw Matlab and C versions\n");
 	
 	free(correctH);
+
 	// ====== END OF DEBUGGING ======
-*/	
+	
 	// ***** free variables *****
 	free(atm->x);
 	free(atm->y);

@@ -20,12 +20,12 @@ int main(){
 FILE *prof_file = fopen("profiling_file.txt", "w");
 int nthreads = 16;
 	
-for (int chunkSize = 200; chunkSize <= 10000; chunkSize += 400){
+for (int chunkSize = 10000; chunkSize <= 10000; chunkSize += 400){
 	printf("chunkSize = %d\n", chunkSize);
 
 	omp_set_num_threads(nthreads);
 
-	int ntimes = 10;
+	int ntimes = 1;
 	double perf[ntimes][2];
 	
 	for (int attempt = 0; attempt < ntimes; attempt++){
@@ -124,7 +124,7 @@ for (int chunkSize = 200; chunkSize <= 10000; chunkSize += 400){
 	
 		double tstart = omp_get_wtime();
 		
-		for (int nt = 1; nt <= 100; nt++){   // tend*24*3600
+		for (int nt = 1; nt <= 1; nt++){   // tend*24*3600
 			#pragma omp single
 			{
 			memcpy(K, H_t, sizeof(fType) * atm_t->Nnodes * atm_t->Nvar); // K = H
@@ -132,7 +132,7 @@ for (int chunkSize = 200; chunkSize <= 10000; chunkSize += 400){
 
 			
 			evalCartRhs_fd(K, DP_t, atm_t, gradghm_t, F, &start1, &start2, chunkSize, &tps1);
-			
+/*			
 			#pragma omp single
 			{
 			computeK(H_t, F, dt, 0.5, atm_t->Nnodes, atm_t->Nvar, 1.0, 1, K, d);
@@ -171,6 +171,7 @@ for (int chunkSize = 200; chunkSize <= 10000; chunkSize += 400){
 				H_t[i] += (1.0/6.0) * d[i];
 			}
 			}
+*/
 		}
 		
 		#pragma omp barrier
@@ -187,7 +188,7 @@ for (int chunkSize = 200; chunkSize <= 10000; chunkSize += 400){
 		printf("#attempt = %d Fused loop time (seconds): %lf\n", attempt, perf[attempt][0]);
 		printf("#attempt = %d Total time (seconds): %lf\n", attempt, perf[attempt][1]);
 
-
+/*
 		// ======= DEBUGGING =========
 			int count = 0;	
 			FILE* file_ptr = fopen("H_debug.bin", "r");
@@ -211,7 +212,7 @@ for (int chunkSize = 200; chunkSize <= 10000; chunkSize += 400){
 			
 			free(correctH);
 		// ====== END OF DEBUGGING ======
-		
+*/		
 		// ***** free variables *****
 		free(atm_t->x);
 		free(atm_t->y);

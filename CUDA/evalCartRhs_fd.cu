@@ -164,95 +164,109 @@ __global__ void evalCartRhs_fd(	const double* H,
 				int node_id = blockIdx.x*nNodesPerBlock + (step-1)*nComputeWarps + compute_warp_id;
 				
 				// TODO check boundary
-				if (node_id >= Nnodes) break;
-/*
-				// ================ Load all local pointers =====================
-				int* local_idx = (int*)load_space[compute_phase];	// head pointer of a compute partition
-				double* local_DPx = (double*)&local_idx[32*nComputeWarps];
-				double* local_DPy = (double*)&local_DPx[32*nComputeWarps];
-				double* local_DPz = (double*)&local_DPy[32*nComputeWarps];
-				double* local_L = (double*)&local_DPz[32*nComputeWarps];
-				double* local_nbr_H = (double*)&local_L[32*nComputeWarps];
-				double* local_center_H = (double*)&local_nbr_H[4*32*nComputeWarps];
-				double* local_x = (double*)&local_center_H[4*nComputeWarps];
-				double* local_y = (double*)&local_x[1*nComputeWarps];
-				double* local_z = (double*)&local_y[1*nComputeWarps];
-				double* local_f = (double*)&local_z[1*nComputeWarps];
-				double* local_ghm = (double*)&local_f[1*nComputeWarps];
-				double* local_p_u = (double*)&local_ghm[1*nComputeWarps];
-				double* local_p_v = (double*)&local_p_u[3*nComputeWarps];
-				double* local_p_w = (double*)&local_p_v[3*nComputeWarps];
-				double* local_gradghm = (double*)&local_p_w[3*nComputeWarps];
-				// ==============================================================
-		
-				int offset = 32*compute_warp_id; // for vector size of 32 
+				if (node_id < Nnodes){ 
+					// ================ Load all local pointers =====================
+					int* local_idx = (int*)load_space[compute_phase];	// head pointer of a compute partition
+					double* local_DPx = (double*)&local_idx[32*nComputeWarps];
+					double* local_DPy = (double*)&local_DPx[32*nComputeWarps];
+					double* local_DPz = (double*)&local_DPy[32*nComputeWarps];
+					double* local_L = (double*)&local_DPz[32*nComputeWarps];
+					double* local_nbr_H = (double*)&local_L[32*nComputeWarps];
+					double* local_center_H = (double*)&local_nbr_H[4*32*nComputeWarps];
+					double* local_x = (double*)&local_center_H[4*nComputeWarps];
+					double* local_y = (double*)&local_x[1*nComputeWarps];
+					double* local_z = (double*)&local_y[1*nComputeWarps];
+					double* local_f = (double*)&local_z[1*nComputeWarps];
+					double* local_ghm = (double*)&local_f[1*nComputeWarps];
+					double* local_p_u = (double*)&local_ghm[1*nComputeWarps];
+					double* local_p_v = (double*)&local_p_u[3*nComputeWarps];
+					double* local_p_w = (double*)&local_p_v[3*nComputeWarps];
+					double* local_gradghm = (double*)&local_p_w[3*nComputeWarps];
+					// ==============================================================
+			
+					int offset = 32*compute_warp_id; // for vector size of 32 
+					
+					for (int k = 0; k < 4; k++){
+						Tx_i[tid] = local_DPx[offset+tid] * local_nbr_H[offset*4+tid*4+k];
+						Ty_i[tid] = local_DPy[offset+tid] * local_nbr_H[offset*4+tid*4+k];
+						Tz_i[tid] = local_DPz[offset+tid] * local_nbr_H[offset*4+tid*4+k];
+						HV_i[tid] = local_L  [offset+tid] * local_nbr_H[offset*4+tid*4+k];
 
-				for (int k = 0; k < 4; k++){
-					Tx_i[tid] = local_DPx[offset+tid] * local_nbr_H[offset+tid*4+k];
-					Ty_i[tid] = local_DPy[offset+tid] * local_nbr_H[offset+tid*4+k];
-					Tz_i[tid] = local_DPz[offset+tid] * local_nbr_H[offset+tid*4+k];
-					HV_i[tid] = local_L  [offset+tid] * local_nbr_H[offset+tid*4+k];
+						sumReductionInWarp(Tx_i, tid);
+						sumReductionInWarp(Ty_i, tid);
+						sumReductionInWarp(Tz_i, tid);
+						sumReductionInWarp(HV_i, tid);
 
-					sumReductionInWarp(Tx_i, tid);
-					sumReductionInWarp(Ty_i, tid);
-					sumReductionInWarp(Tz_i, tid);
-					sumReductionInWarp(HV_i, tid);
+						if (tid == 0){
+							Tx[k] = Tx_i[0];
+							Ty[k] = Ty_i[0];
+							Tz[k] = Tz_i[0];
+							HV[k] = HV_i[0];
+						}
+					}	
+				
+	/*	
+					// TODO debugging	
+					if (node_id == 12345 && tid == 0){
+						for (int n = 0; n < 32; n++)
+							printf("n = %d nbr_id %d nbr_H = %lf %lf %lf %lf\n", n, local_idx[offset+n],
+									local_nbr_H[offset*4+n*4+0], local_nbr_H[offset*4+n*4+1], 
+									local_nbr_H[offset*4+n*4+2], local_nbr_H[offset*4+n*4+3]);
+					}				
+	*/
 
+					offset = 4*compute_warp_id; // for vector size of 4
+
+					// compute p, q, s
 					if (tid == 0){
-						Tx[k] = Tx_i[0];
-						Ty[k] = Ty_i[0];
-						Tz[k] = Tz_i[0];
-						HV[k] = HV_i[0];
-					} 
-				}	
-		
-				offset = 4*compute_warp_id; // for vector size of 4
+						double p = - ( 	local_center_H[offset+0] * Tx[0] 
+							      + local_center_H[offset+1] * Ty[0] 
+							      + local_center_H[offset+2] * Tz[0] 
+							      + local_f[compute_warp_id] 
+							      * (local_y[compute_warp_id] * local_center_H[offset+2] 
+							      -  local_z[compute_warp_id] * local_center_H[offset+1]) 
+							      + Tx[3]);
 
-				// compute p, q, s
-				if (tid == 0){
-					double p = - ( 	local_center_H[offset+0] * Tx[0] 
-						      + local_center_H[offset+1] * Ty[0] 
-						      + local_center_H[offset+2] * Tz[0] 
-						      + local_f[compute_warp_id] 
-						      * (local_y[compute_warp_id] * local_center_H[offset+2] 
-						      -  local_z[compute_warp_id] * local_center_H[offset+1]) 
-						      + Tx[3]);
+						double q = - (	local_center_H[offset+0] * Tx[1] 
+							      + local_center_H[offset+1] * Ty[1] 
+							      + local_center_H[offset+2] * Tz[1]
+							      + local_f[compute_warp_id] 
+							      * (local_z[compute_warp_id] * local_center_H[offset+0] 
+							      -  local_x[compute_warp_id] * local_center_H[offset+2]) 
+							      + Ty[3]);
 
-					double q = - (	local_center_H[offset+0] * Tx[1] 
-						      + local_center_H[offset+1] * Ty[1] 
-						      + local_center_H[offset+2] * Tz[1]
-						      + local_f[compute_warp_id] 
-						      * (local_z[compute_warp_id] * local_center_H[offset+0] 
-						      -  local_x[compute_warp_id] * local_center_H[offset+2]) 
-						      + Ty[3]);
+						double s = - (	local_center_H[offset+0] * Tx[2] 
+							      + local_center_H[offset+1] * Ty[2] 
+							      + local_center_H[offset+2] * Tz[2]
+							      + local_f[compute_warp_id] 
+							      * (local_x[compute_warp_id] * local_center_H[offset+1] 
+							      -  local_y[compute_warp_id] * local_center_H[offset+0]) 
+							      + Tz[3]);
+						
+						int offset_3 = 3*compute_warp_id; // for vector size of 3
 
-					double s = - (	local_center_H[offset+0] * Tx[2] 
-						      + local_center_H[offset+1] * Ty[2] 
-						      + local_center_H[offset+2] * Tz[2]
-						      + local_f[compute_warp_id] 
-						      * (local_x[compute_warp_id] * local_center_H[offset+1] 
-						      -  local_y[compute_warp_id] * local_center_H[offset+0]) 
-						      + Tz[3]);
-
-					int offset_3 = 3*compute_warp_id; // for vector size of 3
-
-					F[node_id*4+0] = local_p_u[offset_3+0] * p 
-						       + local_p_u[offset_3+1] * q 
-						       + local_p_u[offset_3+2] * s + HV[0];
-					F[node_id*4+1] = local_p_v[offset_3+0] * p 
-						       + local_p_v[offset_3+1] * q 
-						       + local_p_v[offset_3+2] * s + HV[1];
-					F[node_id*4+2] = local_p_w[offset_3+0] * p 
-						       + local_p_w[offset_3+1] * q 
-						       + local_p_w[offset_3+2] * s + HV[2];
-					F[node_id*4+3] = - (local_center_H[offset+0] * (Tx[3] - local_gradghm[offset_3+0])
-						      	  + local_center_H[offset+1] * (Ty[3] - local_gradghm[offset_3+1])
-						          + local_center_H[offset+2] * (Tz[3] - local_gradghm[offset_3+2])
-						      	  +(local_center_H[offset+3] + gh0 - local_ghm[compute_warp_id]) 
-							  * (Tx[0] + Ty[1] + Tz[2]))
-						          + HV[3];			
-				}
+						F[node_id*4+0] = local_p_u[offset_3+0] * p 
+							       + local_p_u[offset_3+1] * q 
+							       + local_p_u[offset_3+2] * s + HV[0];
+						F[node_id*4+1] = local_p_v[offset_3+0] * p 
+							       + local_p_v[offset_3+1] * q 
+							       + local_p_v[offset_3+2] * s + HV[1];
+						F[node_id*4+2] = local_p_w[offset_3+0] * p 
+							       + local_p_w[offset_3+1] * q 
+							       + local_p_w[offset_3+2] * s + HV[2];
+						F[node_id*4+3] = - (local_center_H[offset+0] * (Tx[3] - local_gradghm[offset_3+0])
+								  + local_center_H[offset+1] * (Ty[3] - local_gradghm[offset_3+1])
+								  + local_center_H[offset+2] * (Tz[3] - local_gradghm[offset_3+2])
+								  +(local_center_H[offset+3] + gh0 - local_ghm[compute_warp_id]) 
+								  * (Tx[0] + Ty[1] + Tz[2]))
+								  + HV[3];	
+					}		
+/*
+	// TODO DEBUGGING
+	// if (node_id == 10850 && blockIdx.x == 200 && step == 9 && tid == 0)
+		printf("node_id = %d F = %f\n", node_id,  F[node_id*4+0]); 
 */
+				}
 			}
 		}
 

@@ -117,7 +117,7 @@ void  evalCartRhs_fd( 	const fType* H,
 			HV_i2 = 0.0; 
 			HV_i3 = 0.0; 
 			HV_i4 = 0.0; 
-		
+
 			for (int inbr = 0; inbr < Nnbr; inbr++){
 				int dp_idx = i*(Nnbr+1) + inbr;
 				int h_idx = idx[dp_idx] * Nvar;	   // neighbor's index in H
@@ -126,6 +126,10 @@ void  evalCartRhs_fd( 	const fType* H,
 				fType dp_y = DPy[dp_idx];
 				fType dp_z = DPz[dp_idx];
 				fType l = L[dp_idx];
+
+if (i == 12345)
+	printf("n = %d nbr_id %d H_nbr = %lf %lf %lf %lf\n", inbr, h_idx, H[h_idx+0], 
+						H[h_idx+1], H[h_idx+2], H[h_idx+3]);
 
 				Tx_i1 += dp_x * H[h_idx+0]; // DPx[i][inbr]*H[nbr_idx][ivar]
 				Ty_i1 += dp_y * H[h_idx+0]; // DPy[i][inbr]*H[nbr_idx][ivar]
@@ -147,6 +151,9 @@ void  evalCartRhs_fd( 	const fType* H,
 				Tz_i4 += dp_z * H[h_idx+3]; // DPz[i][inbr]*H[nbr_idx][ivar]
 				HV_i4 += l * H[h_idx+3];   // L[i][inbr]*H[nbr_idx][ivar]
 			}
+//if (i == 12345)
+//	printf("%lf\n", Tx_i1);
+		
 
 			H_i1 = H[i*Nvar+0];
 			H_i2 = H[i*Nvar+1];
