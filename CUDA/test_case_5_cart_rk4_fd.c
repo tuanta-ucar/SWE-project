@@ -57,8 +57,10 @@ int main(){
                       		(void**)&H_d, atm_d, DP_d, (void**)&gradghm_d, (void**)&F_d, (void**)&K_d);
 	// **************************************************************
 
+	long long kernelTime = 0;
+
 	// ***** main loop *****
-	for (int nt = 1; nt <= 100; nt++){   // tend*24*3600
+	for (int nt = 1; nt <= 1; nt++){   // tend*24*3600
 		printf("Step %d \n", nt);
 
 // -----------------------
@@ -68,7 +70,7 @@ int main(){
 		copyCPUtoGPU(K_d, K, sizeof(fType) * Nnodes * Nvar);
 		
 		// evoke evalCartRhs_fd kernel
-		evoke_evalCartRhs_fd(K_d, atm_d, DP_d, gradghm_d, F_d);
+		evoke_evalCartRhs_fd(K_d, atm_d, DP_d, gradghm_d, F_d, &kernelTime);
 
 		// copy F_d -> F 
 		copyGPUtoCPU(F, F_d, sizeof(fType)*Nnodes*Nvar);
@@ -80,7 +82,7 @@ int main(){
 		copyCPUtoGPU(K_d, K, sizeof(fType) * Nnodes * Nvar);
 
 		// evoke evalCartRhs_fd kernel
-		evoke_evalCartRhs_fd(K_d, atm_d, DP_d, gradghm_d, F_d);
+		evoke_evalCartRhs_fd(K_d, atm_d, DP_d, gradghm_d, F_d, &kernelTime);
 
 		// copy F_d -> F 
 		copyGPUtoCPU(F, F_d, sizeof(fType)*Nnodes*Nvar);
@@ -91,7 +93,7 @@ int main(){
 		copyCPUtoGPU(K_d, K, sizeof(fType) * Nnodes * Nvar);
 
 		// evoke evalCartRhs_fd kernel
-		evoke_evalCartRhs_fd(K_d, atm_d, DP_d, gradghm_d, F_d);
+		evoke_evalCartRhs_fd(K_d, atm_d, DP_d, gradghm_d, F_d, &kernelTime);
 
 		// copy F_d -> F 
 		copyGPUtoCPU(F, F_d, sizeof(fType)*Nnodes*Nvar);
@@ -102,7 +104,7 @@ int main(){
 		copyCPUtoGPU(K_d, K, sizeof(fType) * Nnodes * Nvar);
 
 		// evoke evalCartRhs_fd kernel
-		evoke_evalCartRhs_fd(K_d, atm_d, DP_d, gradghm_d, F_d);
+		evoke_evalCartRhs_fd(K_d, atm_d, DP_d, gradghm_d, F_d, &kernelTime);
 
 		// copy F_d -> F 
 		copyGPUtoCPU(F, F_d, sizeof(fType)*Nnodes*Nvar);
@@ -118,7 +120,7 @@ int main(){
 	// ======= DEBUGGING =========
 
 	int count = 0;	
-	FILE* file_ptr = fopen("H_debug.bin", "r");
+	FILE* file_ptr = fopen("H_debug_100_step.bin", "r");
 
 	double* correctH = (double*) malloc (sizeof(double)*atm->Nnodes * atm->Nvar);
 	fread(correctH, sizeof(double), atm->Nnodes * atm->Nvar, file_ptr);
@@ -137,6 +139,8 @@ int main(){
 	if (count == 0)	
 		printf("No difference that is larger than 1e-10 btw Matlab and C versions\n");
 	
+	printf("Time per step (in seconds) = %lf\n", kernelTime*1E-6/100);
+
 	free(correctH);
 
 	// ====== END OF DEBUGGING ======
