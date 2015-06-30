@@ -37,6 +37,6 @@ void evoke_evalCartRhs_fd(const fType* H_d,
                           const atm_struct* atm_d,
                           const DP_struct* DP_d,
                           const fType* gradghm_d,
-                          fType* F_d);
+                          fType* F_d, long long* kernelTime);
 
 #endif

@@ -3,14 +3,15 @@
 #include <evalCartRhs_fd.h>
 #include <cuda.h>
 #include <cuda_profiler_api.h>
+#include <timer.h>
 
 #define BLOCK_SIZE 256
 
 #define nWarpsPerBlock (BLOCK_SIZE/32)	// total number of warps per block
 
-#define nMemLoadWarps 4					// number of warps dedicated to global memory load
+#define nMemLoadWarps 2					// number of warps dedicated to global memory load
 #define nComputeWarps (nWarpsPerBlock-nMemLoadWarps)	// number of warps dedicated to computation
-#define nIters 10					// number of iterations in each block
+#define nIters 5					// number of iterations in each block
 
 #define nNodesPerBlock ((nIters-1)*nComputeWarps)	// # nodes to be processed by a block - each compute warp is corresponding to 1 stencil center
 #define nBlocksPerGrid (Nnodes/nNodesPerBlock + 1)	// # blocks per grid
@@ -48,22 +49,22 @@
 
 // sum all 32 elements in array
 // the sum is stored in array[0]
-__device__ void sumReductionInWarp(double array[32], int tid){
+__device__ void sumReductionInWarp(fType array[32], int tid){
 	for (int s = 1; s < 32; s *= 2){
 		if (tid % (2*s) == 0)
 			array[tid] += array[tid+s];
 	}
 }
 
-__global__ void evalCartRhs_fd(	const double* H,
-				const int* idx,	const double* DPx, const double* DPy, const double* DPz, const double* L,   
-				const double* x, const double* y, const double* z, const double* f, const double* ghm,
-				const double* p_u, const double* p_v, const double* p_w, const double* gradghm,
+__global__ void evalCartRhs_fd(	const fType* H,
+				const int* idx,	const fType* DPx, const fType* DPy, const fType* DPz, const fType* L,   
+				const fType* x, const fType* y, const fType* z, const fType* f, const fType* ghm,
+				const fType* p_u, const fType* p_v, const fType* p_w, const fType* gradghm,
 				
-				const double g, const double a, const double gh0, // constants
+				const fType g, const fType a, const fType gh0, // constants
 				const int Nnodes, const int Nvar, const int Nnbr,
 				
-				double* F	   // output
+				fType* F	   // output
 ){
 	// ================== Thread Layout =====================
 	//	First nMemLoadWarps -> Load data from global mem -> shared mem at step (stp)
@@ -76,7 +77,7 @@ __global__ void evalCartRhs_fd(	const double* H,
 	// ================================================================
 
 	// Declare the shared memory space for this block
-	extern __shared__ double sharedMem[];
+	extern __shared__ fType sharedMem[];
 
 	int step = 0;
 
@@ -98,9 +99,9 @@ __global__ void evalCartRhs_fd(	const double* H,
 					// load idx, DPx, DPy, DPz and L
 					// offset for 32-element vectors in shared memory (idx, DPx, DPy, DPz and L)
 					int offset = (computePerLoad*32)*loadWarpID + k*32;	
-					// double* load_ptr = (double*)load_space[step & 1];	// step % 2 == step & 1		
+					// fType* load_ptr = (fType*)load_space[step & 1];	// step % 2 == step & 1		
 
-					double* load_ptr;
+					fType* load_ptr;
 
 					if (step % 2 == 0)
 						load_ptr = sharedMem + 144*nComputeWarps;
@@ -154,7 +155,7 @@ __global__ void evalCartRhs_fd(	const double* H,
 				// check boundary
 				if (node_id < Nnodes){ 
 					// **** pointers to space used to store intermediate result duing computation phase  ****
-					double* load_ptr;					
+					fType* load_ptr;					
 					if (step % 2 == 1)
 						load_ptr = sharedMem + 144*nComputeWarps;
 					else 
@@ -186,7 +187,7 @@ __global__ void evalCartRhs_fd(	const double* H,
 
 					// compute p, q, s
 					if (tid == 0){
-						double p =-(load_ptr[center_H_offset+4*computeWarpID+0] * sharedMem[Tx_offset+computeWarpID*4+0] 
+						fType p =-(load_ptr[center_H_offset+4*computeWarpID+0] * sharedMem[Tx_offset+computeWarpID*4+0] 
 							      + load_ptr[center_H_offset+4*computeWarpID+1] * sharedMem[Ty_offset+computeWarpID*4+0] 
 							      + load_ptr[center_H_offset+4*computeWarpID+2] * sharedMem[Tz_offset+computeWarpID*4+0] 
 							      + load_ptr[f_offset+computeWarpID] 
@@ -194,7 +195,7 @@ __global__ void evalCartRhs_fd(	const double* H,
 							      -  load_ptr[z_offset+computeWarpID] * load_ptr[center_H_offset+4*computeWarpID+1]) 
 							      + sharedMem[Tx_offset+computeWarpID*4+3]);
 
-						double q =-(load_ptr[center_H_offset+4*computeWarpID+0] * sharedMem[Tx_offset+computeWarpID*4+1] 
+						fType q =-(load_ptr[center_H_offset+4*computeWarpID+0] * sharedMem[Tx_offset+computeWarpID*4+1] 
 							      + load_ptr[center_H_offset+4*computeWarpID+1] * sharedMem[Ty_offset+computeWarpID*4+1] 
 							      + load_ptr[center_H_offset+4*computeWarpID+2] * sharedMem[Tz_offset+computeWarpID*4+1]
 							      + load_ptr[f_offset+computeWarpID] 
@@ -202,7 +203,7 @@ __global__ void evalCartRhs_fd(	const double* H,
 							      - load_ptr[x_offset+computeWarpID] * load_ptr[center_H_offset+4*computeWarpID+2]) 
 							      + sharedMem[Ty_offset+computeWarpID*4+3]);
 
-						double s =-(load_ptr[center_H_offset+4*computeWarpID+0] * sharedMem[Tx_offset+computeWarpID*4+2] 
+						fType s =-(load_ptr[center_H_offset+4*computeWarpID+0] * sharedMem[Tx_offset+computeWarpID*4+2] 
 							      + load_ptr[center_H_offset+4*computeWarpID+1] * sharedMem[Ty_offset+computeWarpID*4+2] 
 							      + load_ptr[center_H_offset+4*computeWarpID+2] * sharedMem[Tz_offset+computeWarpID*4+2]
 							      + load_ptr[f_offset+computeWarpID] 
@@ -247,7 +248,7 @@ void evoke_evalCartRhs_fd(const fType* H_d,
 			  const atm_struct* atm_d,
 			  const DP_struct* DP_d,
 			  const fType* gradghm_d,
-			  fType* F_d){
+			  fType* F_d, long long* kernelTime){
 
 	// Extract constants from atm_struct
 	const fType* x = atm_d->x;
@@ -277,12 +278,12 @@ void evoke_evalCartRhs_fd(const fType* H_d,
         const fType* L = DP_d->L;
 
 	// Shared memory space = Space for intermediate results + 2 * Space for input data from global mem
-	size_t sharedMemSize = (4*4 + 4*32) * nComputeWarps * sizeof(double); // shared memory space for intermediate results
-	sharedMemSize += 2 * nComputeWarps * 32 * 4 * sizeof(double);	// DPx, DPy, DPz, L
-	sharedMemSize += 2 * nComputeWarps * 32 * 4 * sizeof(double);	// H[4] * 32 neighbors 
-	sharedMemSize += 2 * nComputeWarps * 4 * sizeof(double);	// H[4] for current stencil point
-	sharedMemSize += 2 * nComputeWarps * 5 * sizeof(double);	// x[1], y[1], z[1], f[1], ghm[1]
-	sharedMemSize += 2 * nComputeWarps * 4 * 3 * sizeof(double);	// p_u[3], p_v[3], p_w[3], gradghm[3]
+	size_t sharedMemSize = (4*4 + 4*32) * nComputeWarps * sizeof(fType); // shared memory space for intermediate results
+	sharedMemSize += 2 * nComputeWarps * 32 * 4 * sizeof(fType);	// DPx, DPy, DPz, L
+	sharedMemSize += 2 * nComputeWarps * 32 * 4 * sizeof(fType);	// H[4] * 32 neighbors 
+	sharedMemSize += 2 * nComputeWarps * 4 * sizeof(fType);	// H[4] for current stencil point
+	sharedMemSize += 2 * nComputeWarps * 5 * sizeof(fType);	// x[1], y[1], z[1], f[1], ghm[1]
+	sharedMemSize += 2 * nComputeWarps * 4 * 3 * sizeof(fType);	// p_u[3], p_v[3], p_w[3], gradghm[3]
 
 	/* Shared memory layout
 	 *	<<<intermediate_result_space>>> + <<<load_space_1 (p1)>>> + <<<load_space_2 (p2)>>>
@@ -299,6 +300,7 @@ void evoke_evalCartRhs_fd(const fType* H_d,
 
 cudaProfilerStart();
 	
+long long start = getTime();
 	// Launch kernel
 	evalCartRhs_fd<<<nBlocksPerGrid, BLOCK_SIZE, sharedMemSize>>>(H_d, idx, DPx, DPy, DPz, L,
 									 x, y, z, f, ghm,
@@ -309,6 +311,8 @@ cudaProfilerStart();
 	
 	// wait for kernel to complete
 	cudaDeviceSynchronize();
+long long end = getTime();
+*kernelTime += (end-start);
 
 cudaProfilerStop();
 }

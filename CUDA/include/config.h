@@ -13,7 +13,7 @@
 //#define false 0
 
 typedef double fType;	// double precision
-// typedef float fType;	// single precision
+//typedef float fType;	// single precision
 
 typedef struct atms {
 	int Nnodes;	// number of nodes
