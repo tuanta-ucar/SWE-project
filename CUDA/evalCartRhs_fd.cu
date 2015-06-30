@@ -162,10 +162,14 @@ __global__ void evalCartRhs_fd(	const double* H,
 
 					#pragma unroll
 					for (int k = 0; k < 4; k++){
-						sharedMem[Tx_i_offset+computeWarpID*32+tid] = load_ptr[DPx_offset+32*computeWarpID+tid] * load_ptr[nbr_H_offset+32*4*computeWarpID+tid*4+k];
-						sharedMem[Ty_i_offset+computeWarpID*32+tid] = load_ptr[DPy_offset+32*computeWarpID+tid] * load_ptr[nbr_H_offset+32*4*computeWarpID+tid*4+k];
-						sharedMem[Tz_i_offset+computeWarpID*32+tid] = load_ptr[DPz_offset+32*computeWarpID+tid] * load_ptr[nbr_H_offset+32*4*computeWarpID+tid*4+k];
-						sharedMem[HV_i_offset+computeWarpID*32+tid] = load_ptr[L_offset+32*computeWarpID+tid] * load_ptr[nbr_H_offset+32*4*computeWarpID+tid*4+k];
+						sharedMem[Tx_i_offset+computeWarpID*32+tid] = load_ptr[DPx_offset+32*computeWarpID+tid] 
+															* load_ptr[nbr_H_offset+32*4*computeWarpID+tid*4+k];
+						sharedMem[Ty_i_offset+computeWarpID*32+tid] = load_ptr[DPy_offset+32*computeWarpID+tid] 
+															* load_ptr[nbr_H_offset+32*4*computeWarpID+tid*4+k];
+						sharedMem[Tz_i_offset+computeWarpID*32+tid] = load_ptr[DPz_offset+32*computeWarpID+tid] 
+															* load_ptr[nbr_H_offset+32*4*computeWarpID+tid*4+k];
+						sharedMem[HV_i_offset+computeWarpID*32+tid] = load_ptr[L_offset+32*computeWarpID+tid] 
+															* load_ptr[nbr_H_offset+32*4*computeWarpID+tid*4+k];
 
 						sumReductionInWarp(sharedMem+Tx_i_offset+computeWarpID*32, tid);
 						sumReductionInWarp(sharedMem+Ty_i_offset+computeWarpID*32, tid);

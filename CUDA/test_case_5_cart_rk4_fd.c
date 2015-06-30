@@ -58,7 +58,7 @@ int main(){
 	// **************************************************************
 	
 	// ***** main loop *****
-	for (int nt = 1; nt <= 1; nt++){   // tend*24*3600
+	for (int nt = 1; nt <= 100; nt++){   // tend*24*3600
 		printf("Step %d\n", nt);
 
 // -----------------------
@@ -117,9 +117,9 @@ int main(){
 
 	// ======= DEBUGGING =========
 	int count = 0;	
-	FILE* file_ptr = fopen("H_debug_1_step.bin", "r");
+//	FILE* file_ptr = fopen("H_debug_1_step.bin", "r");
 
-//	FILE* file_ptr = fopen("H_debug.bin", "r");
+	FILE* file_ptr = fopen("H_debug.bin", "r");
 	double* correctH = (double*) malloc (sizeof(double)*atm->Nnodes * atm->Nvar);
 	fread(correctH, sizeof(double), atm->Nnodes * atm->Nvar, file_ptr);
 	fclose(file_ptr);
@@ -128,7 +128,6 @@ int main(){
 		for (int j = 0; j < atm->Nvar; j++){
 			double abs_err = fabs(H[i*4+j] - correctH[mapping[i]*4+j]);
 
-			printf("%d %d %.16f %.16f\n", i/4, i%4, H[i*4+j], correctH[mapping[i]*4+j]);
 			if (abs_err > 1E-10){
 				printf("%d %d %.16f %.16f\n", i/4, i%4, H[i*4+j], correctH[mapping[i]*4+j]);
 				count++;
