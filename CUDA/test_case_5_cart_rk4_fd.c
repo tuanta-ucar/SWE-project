@@ -124,6 +124,7 @@ int main(){
 	for (int i = 0; i < atm->Nnodes; i++){
 		for (int j = 0; j < atm->Nvar; j++){
 			double abs_err = fabs(H[i*4+j] - correctH[mapping[i]*4+j]);
+				printf("%d %d %.16f %.16f\n", i/4, i%4, H[i*4+j], correctH[mapping[i]*4+j]);
 			if (abs_err > 1E-10){
 				printf("%d %d %.16f %.16f\n", i/4, i%4, H[i*4+j], correctH[mapping[i]*4+j]);
 				count++;
